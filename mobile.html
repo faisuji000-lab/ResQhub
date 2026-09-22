@@ -1,0 +1,603 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+  <title>ResQHub - Citizen Disaster Helpline</title>
+
+  <!-- PWA Manifest & App Icons -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b1120">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ResQHub">
+
+  <!-- Local Tailwind CSS -->
+  <script src="vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#ef4444',
+              amber: '#f59e0b',
+              emerald: '#10b981',
+              blue: '#3b82f6',
+              dark: '#0b1120',
+              card: '#1e293b'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Local Leaflet CSS -->
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    }
+    .safe-bottom {
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom, 20px));
+    }
+    .sos-pulse-ring {
+      animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+    }
+    @keyframes pulse-ring {
+      0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7); }
+      70% { transform: scale(1.04); box-shadow: 0 0 0 25px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+    .active-nav-tab {
+      color: #38bdf8 !important;
+      background-color: rgba(56, 189, 248, 0.12);
+    }
+  </style>
+</head>
+<body class="bg-[#0b1120] text-slate-100 min-h-screen flex flex-col safe-bottom antialiased">
+
+  <!-- Top Sticky Header -->
+  <header class="sticky top-0 z-40 bg-[#0f172a]/95 backdrop-blur border-b border-slate-800 px-4 py-3">
+    <div class="flex items-center justify-between">
+      <div class="flex items-center gap-2.5">
+        <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-red-600 to-amber-600 flex items-center justify-center text-lg shadow-md shadow-red-950/40">
+          🛡️
+        </div>
+        <div>
+          <div class="flex items-center gap-1.5">
+            <h1 class="font-black text-base tracking-tight text-white">ResQ<span class="text-red-500">Hub</span></h1>
+            <span class="text-[9px] font-bold px-1.5 py-0.5 rounded bg-blue-900/60 text-blue-300 border border-blue-700/50">CITIZEN</span>
+          </div>
+          <p class="text-[10px] text-slate-400" id="header-gps-text">📍 GPS: Locating...</p>
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <!-- Online/Offline Indicator Badge -->
+        <span id="mobile-net-status" class="inline-flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-bold bg-emerald-950/80 text-emerald-300 border border-emerald-700/50">
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+          <span>Online</span>
+        </span>
+
+        <!-- Switch to dedicated Phone SOS View -->
+        <a href="user.html" title="Open Dedicated 1-Tap SOS Phone View" class="px-2.5 py-1.5 rounded-lg bg-red-600 hover:bg-red-500 text-white text-[11px] font-bold flex items-center gap-1 transition shadow">
+          <span>⚡</span>
+          <span>Quick SOS</span>
+        </a>
+
+        <!-- Switch to Operator Desktop Dashboard -->
+        <button onclick="switchToOperatorView()" title="Switch to Full Desktop EOC Command Center" class="px-2.5 py-1.5 rounded-lg bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 text-[11px] font-medium flex items-center gap-1 transition">
+          <span>💻</span>
+          <span class="hidden sm:inline">EOC Desk</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Active Disaster Alert Banner -->
+    <div class="mt-2.5 px-3 py-1.5 rounded-lg bg-red-950/70 border border-red-800/60 flex items-center justify-between text-xs text-red-200">
+      <div class="flex items-center gap-2 truncate">
+        <span class="px-1.5 py-0.5 rounded bg-red-600 text-white font-black text-[9px] uppercase tracking-wider shrink-0">ALERT</span>
+        <span class="truncate font-semibold text-[11px]" id="disaster-banner-msg">⚠️ CATEGORY 4 CYCLONE: Heavy surge in Sectors 1, 3 & 4.</span>
+      </div>
+      <button onclick="switchTab('tab-survival')" class="text-[10px] text-red-300 underline font-bold shrink-0 ml-2">Safety Guide</button>
+    </div>
+  </header>
+
+  <!-- Main Content Container -->
+  <main class="flex-1 px-4 py-4 max-w-lg mx-auto w-full space-y-4">
+
+    <!-- TAB 1: 🚨 EMERGENCY SOS (Active by default) -->
+    <section id="section-sos" class="tab-section space-y-4">
+      
+      <!-- Big SOS Card -->
+      <div class="bg-gradient-to-b from-slate-900 to-[#111827] rounded-3xl p-6 border border-slate-800 text-center shadow-2xl relative overflow-hidden">
+        <div class="absolute -top-12 -left-12 w-32 h-32 bg-red-600/10 rounded-full blur-2xl"></div>
+        <div class="absolute -bottom-12 -right-12 w-32 h-32 bg-amber-600/10 rounded-full blur-2xl"></div>
+
+        <div class="relative z-10">
+          <span class="inline-block px-3 py-1 rounded-full text-xs font-bold bg-red-950/80 text-red-300 border border-red-800 mb-3">
+            🚨 IMMEDIATE RESCUE NEEDED?
+          </span>
+          <h2 class="text-xl font-extrabold text-white">Emergency Distress Beacon</h2>
+          <p class="text-xs text-slate-400 mt-1 max-w-xs mx-auto">
+            Sends your exact satellite GPS location to NDRF rescue boats & army teams.
+          </p>
+
+          <!-- Massive 1-Tap SOS Button -->
+          <div class="py-6 flex justify-center">
+            <button id="btn-main-sos" onclick="triggerMobileSos()" class="sos-pulse-ring w-44 h-44 rounded-full bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white flex flex-col items-center justify-center shadow-2xl border-4 border-red-400 active:scale-95 transition transform">
+              <span class="text-4xl mb-1">⚡</span>
+              <span class="text-2xl font-black tracking-wider">TAP SOS</span>
+              <span class="text-[10px] font-bold text-red-100 uppercase tracking-widest mt-0.5">Send Rescue</span>
+            </button>
+          </div>
+
+          <!-- Quick Emergency Type Selector -->
+          <div class="text-left mt-2">
+            <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2">Emergency Situation:</label>
+            <div class="grid grid-cols-2 gap-2 text-xs" id="sos-type-chips">
+              <button onclick="selectSosType(this, '🌊 Water Rising / Trapped on Roof')" class="sos-chip p-2.5 rounded-xl border border-red-500/60 bg-red-950/40 text-red-200 font-semibold text-left flex items-center gap-2">
+                <span>🌊</span> Water Rising / Trapped
+              </button>
+              <button onclick="selectSosType(this, '🚑 Severe Injury / Medical')" class="sos-chip p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-medium text-left flex items-center gap-2">
+                <span>🚑</span> Severe Medical Injury
+              </button>
+              <button onclick="selectSosType(this, '👴 Elderly / Infant Evacuation')" class="sos-chip p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-medium text-left flex items-center gap-2">
+                <span>👴</span> Elderly / Infant Care
+              </button>
+              <button onclick="selectSosType(this, '🏚️ Collapsed Building / Fire')" class="sos-chip p-2.5 rounded-xl border border-slate-700 bg-slate-800/60 text-slate-300 font-medium text-left flex items-center gap-2">
+                <span>🏚️</span> Building Collapse / Fire
+              </button>
+            </div>
+          </div>
+
+          <!-- Optional Quick Details -->
+          <div class="mt-4 pt-3 border-t border-slate-800 text-left">
+            <details class="text-xs group">
+              <summary class="cursor-pointer text-slate-400 hover:text-white font-medium flex items-center justify-between">
+                <span>📝 Add Name or People Count (Optional)</span>
+                <span class="text-slate-500 group-open:rotate-180 transition">▼</span>
+              </summary>
+              <div class="mt-3 space-y-2.5">
+                <input type="text" id="sos-input-name" placeholder="Your Name (e.g. Ramesh Sharma)" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500">
+                <div class="grid grid-cols-2 gap-2">
+                  <input type="tel" id="sos-input-phone" placeholder="Phone Number" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500">
+                  <select id="sos-input-count" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-red-500">
+                    <option value="1">1 Person</option>
+                    <option value="2">2 People</option>
+                    <option value="3" selected>3 People</option>
+                    <option value="4">4 People</option>
+                    <option value="5+">5+ People</option>
+                  </select>
+                </div>
+                <input type="text" id="sos-input-address" placeholder="Landmark or Floor (e.g. Flat 302, 3rd Floor)" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500">
+              </div>
+            </details>
+          </div>
+
+        </div>
+      </div>
+
+      <!-- Active SOS Status Card (Hidden by default, shown when SOS active) -->
+      <div id="sos-active-card" class="hidden bg-red-950/90 border-2 border-red-500 rounded-3xl p-5 shadow-2xl space-y-3">
+        <div class="flex items-center justify-between">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+            <span class="font-black text-sm text-red-100 tracking-wide">DISTRESS SIGNAL ACTIVE</span>
+          </div>
+          <span class="text-[10px] font-bold px-2 py-0.5 rounded bg-red-900 text-red-200 border border-red-600" id="sos-badge-id">#SOS-NOW</span>
+        </div>
+
+        <div class="bg-black/40 rounded-2xl p-3 border border-red-800/60 space-y-2 text-xs">
+          <div class="flex justify-between text-slate-300">
+            <span>Dispatched Unit:</span>
+            <span class="font-bold text-white" id="sos-assigned-unit">NDRF Rescue Boat Alpha</span>
+          </div>
+          <div class="flex justify-between text-slate-300">
+            <span>Response Status:</span>
+            <span class="font-bold text-amber-300" id="sos-response-status">En Route to Coordinates</span>
+          </div>
+          <div class="flex justify-between text-slate-300">
+            <span>Your GPS:</span>
+            <span class="font-mono text-white text-[11px]" id="sos-active-coords">19.0760, 72.8550</span>
+          </div>
+        </div>
+
+        <p class="text-[11px] text-red-200 text-center font-medium">
+          ⚠️ Stay on high ground. Keep phone battery safe. Flash phone light if boats approach.
+        </p>
+
+        <div class="flex gap-2 pt-1">
+          <button onclick="toggleSosFlashlight()" class="flex-1 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs flex items-center justify-center gap-1.5 shadow">
+            <span>🔦</span> Strobe Flash
+          </button>
+          <button onclick="cancelActiveSos()" class="flex-1 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-200 font-bold text-xs border border-slate-700">
+            Cancel (I'm Safe)
+          </button>
+        </div>
+      </div>
+
+      <!-- Quick 1-Tap Helplines Mini Bar -->
+      <div class="grid grid-cols-3 gap-2">
+        <a href="tel:112" class="p-3 rounded-2xl bg-red-950/60 border border-red-800/80 text-center active:scale-95 transition">
+          <div class="text-xl">🚨</div>
+          <div class="font-black text-white text-sm">112</div>
+          <div class="text-[10px] text-red-300">Emergency</div>
+        </a>
+        <a href="tel:108" class="p-3 rounded-2xl bg-blue-950/60 border border-blue-800/80 text-center active:scale-95 transition">
+          <div class="text-xl">🚑</div>
+          <div class="font-black text-white text-sm">108</div>
+          <div class="text-[10px] text-blue-300">Ambulance</div>
+        </a>
+        <a href="tel:1077" class="p-3 rounded-2xl bg-amber-950/60 border border-amber-800/80 text-center active:scale-95 transition">
+          <div class="text-xl">🌊</div>
+          <div class="font-black text-white text-sm">1077</div>
+          <div class="text-[10px] text-amber-300">Disaster Help</div>
+        </a>
+      </div>
+
+    </section>
+
+    <!-- TAB 2: 🛡️ "I AM SAFE" CHECK-IN -->
+    <section id="section-safe" class="tab-section hidden space-y-4">
+      <div class="bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-xl space-y-4">
+        <div class="flex items-center gap-3">
+          <div class="w-10 h-10 rounded-2xl bg-emerald-950 border border-emerald-700 flex items-center justify-center text-xl">
+            🛡️
+          </div>
+          <div>
+            <h2 class="text-lg font-bold text-white">"I Am Safe" Check-In</h2>
+            <p class="text-xs text-slate-400">Notify your family & register in the survivor database.</p>
+          </div>
+        </div>
+
+        <form id="form-safe-checkin" onsubmit="handleSafeCheckin(event)" class="space-y-3">
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Your Full Name *</label>
+            <input type="text" id="safe-name" required placeholder="Enter your full name" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Mobile Phone Number *</label>
+            <input type="tel" id="safe-phone" required placeholder="e.g. +91 98200 12345" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500">
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Where are you currently located? *</label>
+            <select id="safe-location" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500">
+              <option value="St. Jude High School Relief Camp">St. Jude High School Relief Camp (Sector 2)</option>
+              <option value="Metro Sports Arena Mega Shelter">Metro Sports Arena Mega Shelter (Bandra)</option>
+              <option value="Community Civic Center Hub">Community Civic Center Hub (North Hilltop)</option>
+              <option value="At Home (High Ground / Safe)">At Home (High Ground / Safe)</option>
+              <option value="With Family / Relatives">With Relatives / Friends</option>
+              <option value="Other Evacuation Site">Other Location</option>
+            </select>
+          </div>
+
+          <div class="grid grid-cols-2 gap-3">
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Family Members with you</label>
+              <select id="safe-family-count" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500">
+                <option value="1">Only myself (1)</option>
+                <option value="2">2 People</option>
+                <option value="3" selected>3 People</option>
+                <option value="4">4 People</option>
+                <option value="5+">5+ People</option>
+              </select>
+            </div>
+            <div>
+              <label class="block text-xs font-semibold text-slate-300 mb-1">Medical Status</label>
+              <select id="safe-health-status" class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500">
+                <option value="Healthy & Uninjured" selected>Healthy / Uninjured</option>
+                <option value="Minor Bruises">Minor Scratches/Bruises</option>
+                <option value="Need Doctor Consultation">Need Doctor Checkup</option>
+              </select>
+            </div>
+          </div>
+
+          <div>
+            <label class="block text-xs font-semibold text-slate-300 mb-1">Message for Loved Ones (Optional)</label>
+            <input type="text" id="safe-notes" placeholder="e.g. We have food and dry clothing. Don't worry." class="w-full px-3.5 py-2.5 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-emerald-500">
+          </div>
+
+          <button type="submit" class="w-full py-3.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white font-black text-xs shadow-lg shadow-emerald-950/50 flex items-center justify-center gap-2 active:scale-98 transition">
+            <span>✅</span>
+            <span>SUBMIT SAFE CHECK-IN</span>
+          </button>
+        </form>
+
+        <!-- Check-in Success Banner -->
+        <div id="safe-confirm-box" class="hidden p-4 rounded-2xl bg-emerald-950/70 border border-emerald-600 text-center space-y-2">
+          <span class="text-2xl">🎉</span>
+          <h3 class="font-bold text-sm text-emerald-200">You Are Registered Safe!</h3>
+          <p class="text-xs text-emerald-300/90" id="safe-confirm-text">
+            Your name is listed in the National Safe Registry. Relatives searching your name or phone will see your status.
+          </p>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: 🏥 FIND NEAREST HELP (Shelters, Hospitals, Water) -->
+    <section id="section-help" class="tab-section hidden space-y-4">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-lg font-bold text-white">Nearest Help & Shelters</h2>
+          <p class="text-xs text-slate-400">Sorted by distance from your current GPS location.</p>
+        </div>
+        <button onclick="refreshUserGpsAndDistances()" class="p-2 rounded-xl bg-slate-800 text-slate-300 text-xs border border-slate-700 hover:text-white" title="Recalculate distance">
+          🔄 GPS
+        </button>
+      </div>
+
+      <!-- Filter Buttons -->
+      <div class="flex gap-2 overflow-x-auto pb-1">
+        <button onclick="filterHelpCards('all')" class="help-filter-btn px-3 py-1.5 rounded-xl text-xs font-bold bg-blue-600 text-white shrink-0">All</button>
+        <button onclick="filterHelpCards('shelter')" class="help-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white shrink-0">⛺ Shelters</button>
+        <button onclick="filterHelpCards('hospital')" class="help-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white shrink-0">🏥 Hospitals</button>
+        <button onclick="filterHelpCards('water')" class="help-filter-btn px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-800 text-slate-300 hover:text-white shrink-0">💧 Water & Food</button>
+      </div>
+
+      <!-- Mini-Map Toggle Box -->
+      <div class="bg-slate-900 rounded-2xl border border-slate-800 overflow-hidden">
+        <div class="px-4 py-2.5 bg-slate-850 flex items-center justify-between cursor-pointer" onclick="toggleMobileMiniMap()">
+          <span class="text-xs font-bold text-slate-300 flex items-center gap-1.5">
+            <span>🗺️</span> <span>Tactical Mini-Map (Offline)</span>
+          </span>
+          <span id="minimap-toggle-icon" class="text-xs text-slate-400">Show ▼</span>
+        </div>
+        <div id="mobile-map-container" class="h-56 w-full hidden"></div>
+      </div>
+
+      <!-- Facility Cards List -->
+      <div class="space-y-3" id="help-facility-list">
+        <!-- Injected dynamically via mobile.js -->
+      </div>
+    </section>
+
+    <!-- TAB 4: 🔍 FIND MISSING FAMILY -->
+    <section id="section-family" class="tab-section hidden space-y-4">
+      <div class="bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-xl space-y-4">
+        <div>
+          <h2 class="text-lg font-bold text-white">Find Missing Family & Friends</h2>
+          <p class="text-xs text-slate-400">Search survivor camp registrations and safe check-ins.</p>
+        </div>
+
+        <!-- Search Input -->
+        <div class="relative">
+          <input type="text" id="family-search-input" oninput="searchFamilyRegistry()" placeholder="Type name or phone number..." class="w-full pl-10 pr-4 py-3 rounded-2xl bg-slate-800 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-blue-500">
+          <span class="absolute left-3.5 top-3.5 text-slate-400 text-sm">🔍</span>
+        </div>
+
+        <!-- Search Results -->
+        <div class="space-y-2.5" id="family-search-results">
+          <!-- Injected dynamically via mobile.js -->
+        </div>
+      </div>
+
+      <!-- Request Relief Supplies Card -->
+      <div class="bg-slate-900 rounded-3xl p-5 border border-slate-800 shadow-xl space-y-3">
+        <div class="flex items-center gap-2.5">
+          <span class="text-xl">📦</span>
+          <div>
+            <h3 class="font-bold text-sm text-white">Need Relief Supplies Delivered?</h3>
+            <p class="text-xs text-slate-400">Request drinking water, rations, or medicine to your location.</p>
+          </div>
+        </div>
+
+        <form id="form-relief-request" onsubmit="handleReliefRequest(event)" class="space-y-3">
+          <div class="grid grid-cols-2 gap-2 text-xs">
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200">
+              <input type="checkbox" name="reliefItem" value="Clean Drinking Water" checked class="rounded text-blue-600">
+              <span>💧 Clean Water</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200">
+              <input type="checkbox" name="reliefItem" value="Emergency Food Rations" checked class="rounded text-blue-600">
+              <span>🍞 Food Rations</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200">
+              <input type="checkbox" name="reliefItem" value="Baby Food & Diapers" class="rounded text-blue-600">
+              <span>🍼 Baby Care</span>
+            </label>
+            <label class="flex items-center gap-2 p-2 rounded-xl bg-slate-800 border border-slate-700 text-slate-200">
+              <input type="checkbox" name="reliefItem" value="Insulin / Prescription Medicine" class="rounded text-blue-600">
+              <span>💊 Medicines</span>
+            </label>
+          </div>
+
+          <input type="text" id="relief-contact" required placeholder="Your Name & Mobile Number" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-blue-500">
+          <input type="text" id="relief-location" required placeholder="Your Exact Location / House No." class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white text-xs focus:outline-none focus:border-blue-500">
+
+          <button type="submit" class="w-full py-3 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs shadow-md active:scale-98 transition">
+            Submit Relief Supply Request
+          </button>
+        </form>
+      </div>
+    </section>
+
+    <!-- TAB 5: 📞 SPEED-DIAL HELPLINES -->
+    <section id="section-dial" class="tab-section hidden space-y-4">
+      <div>
+        <h2 class="text-lg font-bold text-white">Emergency Helplines (Direct Call)</h2>
+        <p class="text-xs text-slate-400">Tap any button to connect immediately to emergency rescue dispatchers.</p>
+      </div>
+
+      <div class="grid grid-cols-1 gap-3">
+        <a href="tel:112" class="flex items-center justify-between p-4 rounded-2xl bg-red-950/70 border border-red-800 active:scale-98 transition">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-red-600 flex items-center justify-center text-2xl text-white font-black">
+              🚨
+            </div>
+            <div>
+              <div class="font-extrabold text-white text-base">112 - National Emergency</div>
+              <div class="text-xs text-red-300">Police, Rescue & Multi-Disaster Command</div>
+            </div>
+          </div>
+          <span class="px-3 py-1 rounded-xl bg-red-600 text-white text-xs font-bold">CALL NOW</span>
+        </a>
+
+        <a href="tel:108" class="flex items-center justify-between p-4 rounded-2xl bg-blue-950/70 border border-blue-800 active:scale-98 transition">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-blue-600 flex items-center justify-center text-2xl text-white font-black">
+              🚑
+            </div>
+            <div>
+              <div class="font-extrabold text-white text-base">108 - Medical Ambulance</div>
+              <div class="text-xs text-blue-300">Trauma care, Oxygen & Emergency Paramedics</div>
+            </div>
+          </div>
+          <span class="px-3 py-1 rounded-xl bg-blue-600 text-white text-xs font-bold">CALL NOW</span>
+        </a>
+
+        <a href="tel:1077" class="flex items-center justify-between p-4 rounded-2xl bg-amber-950/70 border border-amber-800 active:scale-98 transition">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-amber-600 flex items-center justify-center text-2xl text-white font-black">
+              🌊
+            </div>
+            <div>
+              <div class="font-extrabold text-white text-base">1077 - NDRF Disaster Helpline</div>
+              <div class="text-xs text-amber-300">Flood Boat Rescue & Cyclone Relief Command</div>
+            </div>
+          </div>
+          <span class="px-3 py-1 rounded-xl bg-amber-600 text-white text-xs font-bold">CALL NOW</span>
+        </a>
+
+        <a href="tel:101" class="flex items-center justify-between p-4 rounded-2xl bg-orange-950/70 border border-orange-800 active:scale-98 transition">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-orange-600 flex items-center justify-center text-2xl text-white font-black">
+              🚒
+            </div>
+            <div>
+              <div class="font-extrabold text-white text-base">101 - Fire & Rescue Services</div>
+              <div class="text-xs text-orange-300">Building Collapse, Fire & Hazmat Extraction</div>
+            </div>
+          </div>
+          <span class="px-3 py-1 rounded-xl bg-orange-600 text-white text-xs font-bold">CALL NOW</span>
+        </a>
+
+        <a href="tel:1091" class="flex items-center justify-between p-4 rounded-2xl bg-purple-950/70 border border-purple-800 active:scale-98 transition">
+          <div class="flex items-center gap-3">
+            <div class="w-12 h-12 rounded-xl bg-purple-600 flex items-center justify-center text-2xl text-white font-black">
+              👩
+            </div>
+            <div>
+              <div class="font-extrabold text-white text-base">1091 - Women & Child Safety</div>
+              <div class="text-xs text-purple-300">Special Vulnerable Relief Assistance</div>
+            </div>
+          </div>
+          <span class="px-3 py-1 rounded-xl bg-purple-600 text-white text-xs font-bold">CALL NOW</span>
+        </a>
+      </div>
+    </section>
+
+    <!-- TAB 6: 📚 OFFLINE SURVIVAL & FIRST AID GUIDE -->
+    <section id="section-survival" class="tab-section hidden space-y-4">
+      <div>
+        <h2 class="text-lg font-bold text-white">Offline Survival & First Aid Guide</h2>
+        <p class="text-xs text-slate-400">Critical procedures to stay alive in disaster zones without internet.</p>
+      </div>
+
+      <div class="space-y-3">
+        <!-- Guide 1: Water Purification -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-4 space-y-2">
+          <div class="flex items-center gap-2 text-sm font-bold text-emerald-400">
+            <span>💧</span> How to Make Flood Water Safe to Drink
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            1. Filter cloudy water through a clean cotton cloth or folded T-shirt into a container.<br>
+            2. <strong>Boil vigorously for at least 1 full minute</strong> (3 minutes at higher altitudes).<br>
+            3. If no fire is available: Add 2 drops of standard household unscented chlorine bleach per 1 Liter of clear water. Stir and wait 30 minutes before drinking.
+          </p>
+        </div>
+
+        <!-- Guide 2: Electrical Hazards -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-4 space-y-2">
+          <div class="flex items-center gap-2 text-sm font-bold text-amber-400">
+            <span>⚡</span> Electrical Hazard & Submerged Wires
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            - <strong>NEVER step into water</strong> if power lines are submerged anywhere nearby.<br>
+            - Turn off your home's main electrical breaker switch ONLY if you can do so while completely dry.<br>
+            - If you feel tingling in your feet while wading in water: Stop immediately, hop away on one foot, or shuffle feet together without lifting them off the ground.
+          </p>
+        </div>
+
+        <!-- Guide 3: Snakebite First Aid -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-4 space-y-2">
+          <div class="flex items-center gap-2 text-sm font-bold text-red-400">
+            <span>🐍</span> Flood Snakebite Emergency Action
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            1. Keep the victim calm and strictly still. Movement accelerates venom absorption.<br>
+            2. Immobilize the bitten limb below heart level with a splint or firm cloth.<br>
+            3. <strong>DO NOT cut the wound, DO NOT attempt to suck venom, and DO NOT apply ice or tight tourniquets.</strong><br>
+            4. Evacuate immediately to City Trauma Hospital (+91 98201 11223) for anti-venom vial administration.
+          </p>
+        </div>
+
+        <!-- Guide 4: Severe Bleeding -->
+        <div class="bg-slate-900 rounded-2xl border border-slate-800 p-4 space-y-2">
+          <div class="flex items-center gap-2 text-sm font-bold text-blue-400">
+            <span>🩹</span> Severe Wound & Bleeding Control
+          </div>
+          <p class="text-xs text-slate-300 leading-relaxed">
+            1. Apply firm, continuous direct pressure over the wound using a sterile cloth or clean clothing.<br>
+            2. Elevate the injured limb above heart level if possible.<br>
+            3. Do not remove the first cloth if blood seeps through; place a second cloth directly over it and continue firm pressure until medical help arrives.
+          </p>
+        </div>
+      </div>
+    </section>
+
+  </main>
+
+  <!-- Sticky Bottom Navigation Bar (Thumb Friendly) -->
+  <nav class="fixed bottom-0 left-0 right-0 z-50 bg-[#0f172a]/95 backdrop-blur border-t border-slate-800 px-2 py-1.5 flex justify-around items-center max-w-lg mx-auto shadow-2xl">
+    <button onclick="switchTab('tab-sos')" id="tab-sos" class="nav-btn active-nav-tab flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-slate-400 transition">
+      <span class="text-xl leading-none">🚨</span>
+      <span class="text-[10px] font-bold mt-1">SOS</span>
+    </button>
+    <button onclick="switchTab('tab-safe')" id="tab-safe" class="nav-btn flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-slate-400 transition">
+      <span class="text-xl leading-none">🛡️</span>
+      <span class="text-[10px] font-bold mt-1">I'm Safe</span>
+    </button>
+    <button onclick="switchTab('tab-help')" id="tab-help" class="nav-btn flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-slate-400 transition">
+      <span class="text-xl leading-none">🏥</span>
+      <span class="text-[10px] font-bold mt-1">Near Help</span>
+    </button>
+    <button onclick="switchTab('tab-family')" id="tab-family" class="nav-btn flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-slate-400 transition">
+      <span class="text-xl leading-none">🔍</span>
+      <span class="text-[10px] font-bold mt-1">Family</span>
+    </button>
+    <button onclick="switchTab('tab-dial')" id="tab-dial" class="nav-btn flex flex-col items-center justify-center py-1 px-2.5 rounded-xl text-slate-400 transition">
+      <span class="text-xl leading-none">📞</span>
+      <span class="text-[10px] font-bold mt-1">Helpline</span>
+    </button>
+  </nav>
+
+  <!-- Toast Container -->
+  <div id="toast-container" class="fixed top-16 left-4 right-4 z-50 pointer-events-none flex flex-col gap-2 max-w-sm mx-auto"></div>
+
+  <!-- Scripts -->
+  <script src="vendor/leaflet/leaflet.js"></script>
+  <script src="js/data.js"></script>
+  <script src="js/mobile.js"></script>
+
+  <!-- Service Worker Registration for PWA Offline Functionality -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js')
+          .then(reg => console.log('[Mobile SW] Registered for offline support'))
+          .catch(err => console.warn('[Mobile SW] Registration failed', err));
+      });
+    }
+  </script>
+</body>
+</html>

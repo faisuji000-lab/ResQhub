@@ -1,0 +1,19 @@
+﻿{
+  "name": "ResQHub Offline Disaster Management System",
+  "short_name": "ResQHub",
+  "description": "Zero-Internet Offline Crisis Response & Field EOC Framework",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "any",
+  "background_color": "#0b1120",
+  "theme_color": "#0f172a",
+  "categories": ["emergency", "utilities", "productivity"],
+  "icons": [
+    {
+      "src": "vendor/leaflet/images/marker-icon-2x.png",
+      "sizes": "192x192",
+      "type": "image/png"
+    }
+  ]
+}

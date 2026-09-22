@@ -1,0 +1,1467 @@
+<!DOCTYPE html>
+<html lang="en" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>ResQHub - Citizen Emergency SOS Portal</title>
+
+  <!-- PWA Metadata -->
+  <link rel="manifest" href="manifest.json">
+  <meta name="theme-color" content="#0b1120">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="ResQHub SOS">
+
+  <!-- Local Offline Tailwind CSS -->
+  <script src="vendor/tailwind.js"></script>
+  <script>
+    tailwind.config = {
+      darkMode: 'class',
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              red: '#ef4444',
+              crimson: '#dc2626',
+              amber: '#f59e0b',
+              emerald: '#10b981',
+              cyan: '#06b6d4',
+              blue: '#3b82f6',
+              dark: '#080d1a',
+              card: '#11192e'
+            }
+          }
+        }
+      }
+    }
+  </script>
+
+  <!-- Local Leaflet CSS -->
+  <link rel="stylesheet" href="vendor/leaflet/leaflet.css" />
+
+  <style>
+    body {
+      -webkit-tap-highlight-color: transparent;
+      touch-action: manipulation;
+      user-select: none;
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background-color: #050811;
+    }
+
+    /* Device frame mockup for desktop presentation */
+    @media (min-width: 641px) {
+      .phone-wrapper-mode {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        min-height: 100vh;
+        padding: 24px;
+        background: radial-gradient(circle at top, #131d36 0%, #060913 100%);
+      }
+      .phone-device-frame {
+        width: 395px;
+        height: 820px;
+        max-height: 94vh;
+        border-radius: 48px;
+        border: 10px solid #232d42;
+        box-shadow: 0 25px 60px -15px rgba(0, 0, 0, 0.9), 0 0 0 1px rgba(255, 255, 255, 0.08);
+        overflow: hidden;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+        background: #080d1a;
+      }
+      .phone-notch {
+        width: 120px;
+        height: 24px;
+        background: #232d42;
+        border-radius: 0 0 16px 16px;
+        position: absolute;
+        top: 0;
+        left: 50%;
+        transform: translateX(-50%);
+        z-index: 50;
+      }
+    }
+
+    @media (max-width: 640px) {
+      .phone-wrapper-mode {
+        min-height: 100vh;
+        background: #080d1a;
+      }
+      .phone-device-frame {
+        width: 100%;
+        min-height: 100vh;
+        border: none;
+        border-radius: 0;
+        box-shadow: none;
+      }
+      .phone-notch {
+        display: none;
+      }
+    }
+
+    /* SOS Button Pulse Wave Animation */
+    .sos-beacon-ring {
+      animation: beacon-pulse 1.8s cubic-bezier(0.2, 0.8, 0.2, 1) infinite;
+    }
+    @keyframes beacon-pulse {
+      0% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.8); }
+      60% { transform: scale(1.05); box-shadow: 0 0 0 28px rgba(239, 68, 68, 0); }
+      100% { transform: scale(0.96); box-shadow: 0 0 0 0 rgba(239, 68, 68, 0); }
+    }
+
+    /* SOS Active Strobe Screen */
+    .emergency-strobe {
+      animation: strobe-flash 0.5s steps(2, start) infinite;
+    }
+    @keyframes strobe-flash {
+      to { background-color: #ffffff; }
+    }
+
+    /* Safe Area Inset */
+    .app-scroll-container {
+      padding-bottom: calc(5rem + env(safe-area-inset-bottom, 20px));
+    }
+
+    /* Smooth Nav Button States */
+    .nav-active {
+      color: #38bdf8 !important;
+      background: rgba(56, 189, 248, 0.12);
+    }
+  </style>
+</head>
+<body class="text-slate-100 antialiased">
+
+  <!-- Desktop Presentation Floating Control Toolbar -->
+  <aside id="desktop-demo-bar" class="hidden sm:flex fixed top-4 right-4 z-50 items-center gap-2 bg-slate-900/90 border border-slate-700/80 px-3.5 py-2 rounded-2xl shadow-2xl backdrop-blur text-xs">
+    <div class="flex items-center gap-1.5 font-bold text-slate-300">
+      <span class="w-2 h-2 rounded-full bg-emerald-400 animate-ping"></span>
+      <span>Citizen Mobile Portal (Phone View)</span>
+    </div>
+    <div class="h-4 w-px bg-slate-700"></div>
+    <button onclick="toggleDeviceMockup()" id="btn-toggle-frame" class="px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 transition">
+      🖥️ Fullscreen View
+    </button>
+    <button onclick="copyMobileUrl()" class="px-2.5 py-1 rounded-lg bg-blue-600 hover:bg-blue-500 text-white font-semibold transition flex items-center gap-1">
+      <span>📱</span> Copy Link
+    </button>
+    <a href="index.html" class="px-2.5 py-1 rounded-lg bg-red-600 hover:bg-red-500 text-white font-bold transition flex items-center gap-1">
+      <span>💻</span> Open Laptop Admin Console
+    </a>
+  </aside>
+
+  <!-- Outer Phone Container -->
+  <div class="phone-wrapper-mode" id="phone-wrapper">
+    
+    <!-- Phone Device Shell -->
+    <div class="phone-device-frame relative flex flex-col" id="phone-frame">
+      <div class="phone-notch"></div>
+
+      <!-- Phone Top Status Bar -->
+      <div class="h-7 px-5 pt-1.5 flex items-center justify-between text-[11px] text-slate-400 font-semibold select-none z-40 bg-[#080d1a]">
+        <span id="phone-clock">10:48</span>
+        <div class="flex items-center gap-2">
+          <span class="text-[10px] text-emerald-400 font-bold" id="status-5g">5G • SOS LIVE</span>
+          <span id="phone-battery-pill" class="text-[10px] text-slate-300">🔋 89%</span>
+        </div>
+      </div>
+
+      <!-- App Header Bar (EPICENTER - Smart India Hackathon 2026) -->
+      <header class="bg-[#0e172a] border-b border-slate-800 px-3.5 py-2.5 z-30 flex items-center justify-between shadow-md">
+        <div class="flex items-center gap-2.5">
+          <div class="w-9 h-9 rounded-xl bg-gradient-to-br from-amber-500 via-orange-500 to-red-600 flex items-center justify-center text-lg shadow-md shadow-orange-950/60 font-black">
+            📡
+          </div>
+          <div>
+            <div class="flex items-center gap-1.5">
+              <span class="font-black text-sm tracking-tight text-white">EPICENTER</span>
+              <span class="text-[8px] font-black px-1.5 py-0.5 rounded bg-amber-500 text-slate-950 font-mono tracking-wider">SIH 2026</span>
+              <span class="text-[8px] font-black px-1.5 py-0.5 rounded bg-red-600 text-white uppercase tracking-wider">CITIZEN</span>
+            </div>
+            <p class="text-[10px] text-slate-400 flex items-center gap-1" id="gps-header-status">
+              <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+              <span id="gps-header-text">GPS: Locating satellite fix...</span>
+            </p>
+          </div>
+        </div>
+
+        <!-- Header Actions: Language & Helpline -->
+        <div class="flex items-center gap-1.5">
+          <button onclick="toggleLanguage()" id="btn-lang" class="px-2 py-1 rounded-lg bg-slate-800 border border-slate-700 text-[11px] font-bold text-amber-300 hover:bg-slate-700 transition">
+            हिंदी
+          </button>
+          <a href="tel:112" class="px-2.5 py-1 rounded-lg bg-red-950 border border-red-700/80 text-red-300 text-[11px] font-extrabold flex items-center gap-1 active:scale-95 transition">
+            <span>📞</span> 112
+          </a>
+        </div>
+      </header>
+
+      <!-- Scrollable App Screen Content -->
+      <main class="flex-1 overflow-y-auto app-scroll-container px-3.5 py-3 space-y-3.5 relative" id="app-main-content">
+
+        <!-- Active Disaster Headline Marquee -->
+        <div class="px-3 py-2 rounded-2xl bg-red-950/70 border border-red-800/80 flex items-center justify-between text-xs text-red-200 shadow">
+          <div class="flex items-center gap-2 truncate">
+            <span class="px-1.5 py-0.5 rounded bg-red-600 text-white font-black text-[9px] uppercase tracking-wider shrink-0">URGENT</span>
+            <span class="truncate font-semibold text-[11px]" id="txt-disaster-banner">Cyclone & Surge Alert: Sectors 1, 3 & 4</span>
+          </div>
+          <span id="sync-indicator-badge" class="text-[10px] text-emerald-400 font-bold ml-2 shrink-0 flex items-center gap-1">
+            <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Laptop EOC Linked
+          </span>
+        </div>
+
+        <!-- Shake x2 Accelerometer Sensor Bar (Slide 1 & 2 Alignment) -->
+        <div class="p-2.5 rounded-2xl bg-amber-950/60 border border-amber-500/70 flex items-center justify-between gap-2 shadow-lg">
+          <div class="flex items-center gap-2">
+            <span class="text-xl animate-bounce">📳</span>
+            <div>
+              <div class="font-black text-amber-200 text-xs flex items-center gap-1.5" id="shake-status-badge">
+                <span>SHAKE ×2 SENSOR: ACTIVE</span>
+                <span class="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 text-[9px] font-black uppercase">AUTO SOS</span>
+              </div>
+              <p class="text-[10px] text-amber-300/80 mt-0.5">Rapidly shake phone twice to trigger emergency rescue without touching screen!</p>
+            </div>
+          </div>
+          <button type="button" onclick="simulateShakeSos()" class="px-2.5 py-1.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 text-[10px] font-black uppercase tracking-wider shadow shrink-0 active:scale-95 transition" title="Test Shake trigger directly">
+            Test Shake
+          </button>
+        </div>
+
+        <!-- ================= TAB 1: ⚡ ALERT (EMERGENCY TRIGGER) ================= -->
+        <div id="tab-content-alert" class="space-y-3.5">
+          
+          <!-- SOS Hero Card -->
+          <div class="rounded-3xl bg-gradient-to-b from-slate-900 to-[#0e1629] p-5 border border-slate-800 text-center shadow-xl relative overflow-hidden">
+            <div class="absolute -top-12 -left-12 w-28 h-28 bg-red-600/15 rounded-full blur-2xl"></div>
+            <div class="absolute -bottom-12 -right-12 w-28 h-28 bg-amber-600/15 rounded-full blur-2xl"></div>
+
+            <div class="relative z-10">
+              <span class="inline-block px-3 py-1 rounded-full text-[11px] font-black bg-red-950 text-red-300 border border-red-700 mb-2.5 tracking-wide" id="lbl-sos-badge">
+                ⚡ EMERGENCY RESCUE NEEDED?
+              </span>
+              <h2 class="text-xl font-black text-white" id="txt-sos-title">Tap To Broadcast Distress</h2>
+              <p class="text-xs text-slate-400 mt-1 max-w-xs mx-auto" id="txt-sos-subtitle">
+                Sends your live satellite GPS location directly to Laptop EOC & NDRF boats.
+              </p>
+
+              <!-- Central 1-Tap SOS Button -->
+              <div class="py-5 flex justify-center">
+                <button id="btn-hero-sos" onclick="triggerCitizenSos('button')" class="sos-beacon-ring w-40 h-40 rounded-full bg-gradient-to-br from-red-600 via-red-500 to-red-700 text-white flex flex-col items-center justify-center shadow-2xl border-4 border-red-400 active:scale-90 transition transform cursor-pointer">
+                  <span class="text-3xl mb-0.5">⚡</span>
+                  <span class="text-2xl font-black tracking-wider" id="txt-hero-sos-btn">TAP SOS</span>
+                  <span class="text-[10px] font-black text-red-100 uppercase tracking-widest mt-0.5" id="txt-hero-sos-sub">SEND RESCUE</span>
+                </button>
+              </div>
+
+              <!-- Live GPS Fix Telemetry Pill -->
+              <div class="bg-black/40 rounded-2xl p-2.5 border border-slate-800 flex items-center justify-between text-left text-xs mb-3">
+                <div class="flex items-center gap-2">
+                  <span class="text-lg">📍</span>
+                  <div>
+                    <div class="font-bold text-slate-200 text-[11px]" id="txt-gps-coord-label">GPS Fix Locked:</div>
+                    <div class="font-mono font-black text-cyan-300 text-xs" id="display-gps-coords">19.0760, 72.8550</div>
+                  </div>
+                </div>
+                <div class="text-right">
+                  <span class="px-2 py-0.5 rounded-full text-[9px] font-bold bg-emerald-950 text-emerald-300 border border-emerald-800" id="display-gps-acc">
+                    🎯 ±4m Accuracy
+                  </span>
+                  <div class="text-[9px] text-slate-400 mt-0.5" id="display-gps-time">Satellite Synced</div>
+                </div>
+              </div>
+
+              <!-- Emergency Category Chips (1-Tap Selection) -->
+              <div class="text-left mb-3">
+                <label class="block text-[11px] font-bold text-slate-300 uppercase tracking-wider mb-2" id="lbl-situation-title">Select Emergency Situation:</label>
+                <div class="grid grid-cols-2 gap-2 text-xs" id="situation-chips-grid">
+                  <button type="button" onclick="selectSosCategory(this, '🌊 Water Rising / Flood Trapped')" class="sos-cat-btn p-2.5 rounded-xl border border-red-500 bg-red-950/60 text-red-200 font-bold text-left flex items-center gap-1.5 transition shadow">
+                    <span>🌊</span> <span class="truncate">Water Rising / Flood</span>
+                  </button>
+                  <button type="button" onclick="selectSosCategory(this, '🚑 Critical Medical Injury')" class="sos-cat-btn p-2.5 rounded-xl border border-slate-800 bg-slate-850 text-slate-300 font-medium text-left flex items-center gap-1.5 hover:border-slate-700 transition">
+                    <span>🚑</span> <span class="truncate">Medical Injury</span>
+                  </button>
+                  <button type="button" onclick="selectSosCategory(this, '🏚️ Building Collapse / Debris')" class="sos-cat-btn p-2.5 rounded-xl border border-slate-800 bg-slate-850 text-slate-300 font-medium text-left flex items-center gap-1.5 hover:border-slate-700 transition">
+                    <span>🏚️</span> <span class="truncate">Under Debris</span>
+                  </button>
+                  <button type="button" onclick="selectSosCategory(this, '👴 Elderly / Children Trapped')" class="sos-cat-btn p-2.5 rounded-xl border border-slate-800 bg-slate-850 text-slate-300 font-medium text-left flex items-center gap-1.5 hover:border-slate-700 transition">
+                    <span>👴</span> <span class="truncate">Elderly / Infant</span>
+                  </button>
+                </div>
+              </div>
+
+              <!-- Optional Details Collapsible -->
+              <details class="text-left text-xs bg-slate-950/50 rounded-2xl p-3 border border-slate-800/80 group">
+                <summary class="cursor-pointer font-bold text-slate-300 hover:text-white flex items-center justify-between">
+                  <span id="lbl-optional-details">📝 Add Name / Trapped Count (Optional)</span>
+                  <span class="text-slate-500 group-open:rotate-180 transition">▼</span>
+                </summary>
+                <div class="mt-3 space-y-2.5 pt-2 border-t border-slate-800">
+                  <input type="text" id="input-sos-name" placeholder="Your Name (e.g. Ramesh Sharma)" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500">
+                  <div class="grid grid-cols-2 gap-2">
+                    <input type="tel" id="input-sos-phone" placeholder="Phone Number" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500">
+                    <select id="input-sos-count" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs focus:outline-none focus:border-red-500 font-semibold">
+                      <option value="1">1 Person Trapped</option>
+                      <option value="2">2 People Trapped</option>
+                      <option value="3" selected>3 People Trapped</option>
+                      <option value="4">4 People Trapped</option>
+                      <option value="5+">5+ People Trapped</option>
+                    </select>
+                  </div>
+                  <input type="text" id="input-sos-landmark" placeholder="Landmark / Floor (e.g. 3rd Floor Rooftop)" class="w-full px-3 py-2 rounded-xl bg-slate-900 border border-slate-700 text-white text-xs placeholder-slate-500 focus:outline-none focus:border-red-500">
+                </div>
+              </details>
+
+            </div>
+          </div>
+
+          <!-- Active SOS Live Two-Way Tracker (Appears upon sending SOS) -->
+          <div id="card-active-beacon" class="hidden rounded-3xl bg-gradient-to-b from-red-950 via-slate-900 to-[#0c1222] border-2 border-red-500 p-4 shadow-2xl space-y-3">
+            
+            <div class="flex items-center justify-between border-b border-red-800/60 pb-2.5">
+              <div class="flex items-center gap-2">
+                <span class="w-3 h-3 rounded-full bg-red-500 animate-ping"></span>
+                <span class="font-black text-sm text-red-200 tracking-wider">BEACON ACTIVE & TRANSMITTING</span>
+              </div>
+              <span class="text-[10px] font-mono font-bold px-2 py-0.5 rounded bg-red-900 text-red-200 border border-red-600" id="live-beacon-id">#SOS-NOW</span>
+            </div>
+
+            <!-- SOS Timestamp Display Pill -->
+            <div class="flex items-center justify-between px-3 py-1.5 rounded-xl bg-black/60 border border-red-800/50 text-[11px]">
+              <span class="text-slate-300 font-bold flex items-center gap-1.5">
+                <span>⏱️</span> Distress Sent At:
+              </span>
+              <span class="font-mono font-black text-amber-300" id="live-beacon-timestamp">--:--:--</span>
+            </div>
+
+            <!-- 4-Stage Response Pipeline -->
+            <div class="p-3 bg-black/40 rounded-2xl border border-red-900/60 space-y-2.5">
+              <div class="text-[10px] uppercase tracking-wider font-bold text-slate-400">Live Rescue Dispatch Pipeline:</div>
+
+              <!-- Step 1: Transmitted -->
+              <div class="flex items-center gap-2.5 text-xs text-emerald-400 font-semibold" id="pipeline-step-1">
+                <span class="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500 flex items-center justify-center text-[10px]" id="pipeline-step-1-icon">✓</span>
+                <span class="flex-1" id="pipeline-step-1-title">1. Distress Signal Delivered to Laptop EOC</span>
+                <span class="text-[10px] font-mono text-slate-400" id="pipeline-step-1-time">Just now</span>
+              </div>
+
+              <!-- Step 2: EOC Alerted -->
+              <div class="flex items-center gap-2.5 text-xs text-emerald-400 font-semibold" id="pipeline-step-2">
+                <span class="w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500 flex items-center justify-center text-[10px]" id="pipeline-step-2-icon">✓</span>
+                <span class="flex-1" id="pipeline-step-2-title">2. Admin Siren Sounding on Laptop Console</span>
+                <span class="text-[10px] text-emerald-400 font-bold" id="pipeline-step-2-badge">Ringing</span>
+              </div>
+
+              <!-- Step 3: Dispatch (Dynamic) -->
+              <div class="flex items-center gap-2.5 text-xs font-semibold" id="pipeline-step-3">
+                <span class="w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500 text-amber-400 flex items-center justify-center text-[10px] animate-pulse">⏳</span>
+                <div class="flex-1">
+                  <span class="text-amber-300 block" id="pipeline-dispatch-title">3. Awaiting Admin Unit Dispatch</span>
+                  <span class="text-[10px] text-slate-400 block" id="pipeline-dispatch-detail">Laptop Incident Commander is selecting your rescue team...</span>
+                </div>
+              </div>
+
+              <!-- Step 4: Evacuation -->
+              <div class="flex items-center gap-2.5 text-xs text-slate-500 font-medium" id="pipeline-step-4">
+                <span class="w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px]">4</span>
+                <span class="flex-1">4. Evacuated to Safe Relief Center</span>
+              </div>
+            </div>
+
+            <!-- Emergency Survival Tools While Waiting -->
+            <div class="space-y-2 pt-1">
+              <span class="text-[10px] font-bold text-slate-300 uppercase tracking-wider block">Night Signaling & Acoustic Tools:</span>
+              <div class="grid grid-cols-2 gap-2 text-xs">
+                <!-- Strobe Flashlight -->
+                <button onclick="toggleNightStrobe()" id="btn-strobe" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold flex items-center justify-center gap-2 transition">
+                  <span id="icon-strobe">🔦</span>
+                  <span id="txt-strobe">Night Strobe</span>
+                </button>
+                <!-- Loud Whistle -->
+                <button onclick="toggleRescueWhistle()" id="btn-whistle" class="p-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-white font-bold flex items-center justify-center gap-2 transition">
+                  <span id="icon-whistle">🔊</span>
+                  <span id="txt-whistle">Rescue Whistle</span>
+                </button>
+              </div>
+
+              <!-- Cancel / Resolved Button -->
+              <div class="flex gap-2 pt-1">
+                <a href="tel:112" class="flex-1 py-2.5 rounded-xl bg-red-600 hover:bg-red-500 text-white text-xs font-black flex items-center justify-center gap-1.5 shadow transition">
+                  <span>📞</span> Call 112 Hotline
+                </a>
+                <button onclick="cancelActiveSos()" class="px-3 py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-400 hover:text-white text-xs font-bold transition">
+                  Cancel SOS
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+        </div>
+
+        <!-- ================= TAB 2: 📢 INFORM (ALERTS & INFORMATION) ================= -->
+        <div id="tab-content-inform" class="hidden space-y-3.5">
+          <!-- Weather Risk & Disaster Advisory Card -->
+          <div class="rounded-3xl bg-slate-900 p-4 border border-slate-800 shadow-xl space-y-3">
+            <div class="flex items-center justify-between border-b border-slate-800 pb-2.5">
+              <div class="flex items-center gap-2">
+                <span class="text-xl">📢</span>
+                <div>
+                  <h3 class="font-black text-sm text-white">Live Weather & Disaster Risk</h3>
+                  <p class="text-[10px] text-slate-400">Meteorological & Flood Telemetry</p>
+                </div>
+              </div>
+              <span class="px-2 py-0.5 rounded bg-red-950 text-red-300 border border-red-800 text-[10px] font-bold">RED ALERT</span>
+            </div>
+
+            <!-- Telemetry Grid -->
+            <div class="grid grid-cols-2 gap-2 text-xs">
+              <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-[10px] text-slate-400 block font-medium">🌪️ WIND SPEED</span>
+                <span class="text-base font-black text-amber-300">110 km/h</span>
+                <span class="text-[9px] text-red-400 block font-semibold">Gale Force Cyclone</span>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-[10px] text-slate-400 block font-medium">🌧️ RAINFALL RATE</span>
+                <span class="text-base font-black text-cyan-300">140 mm/h</span>
+                <span class="text-[9px] text-red-400 block font-semibold">Catastrophic Flash Flood</span>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-[10px] text-slate-400 block font-medium">🌊 STORM SURGE</span>
+                <span class="text-base font-black text-blue-300">3.8 Meters</span>
+                <span class="text-[9px] text-amber-400 block font-semibold">Coastal Inundation</span>
+              </div>
+              <div class="p-2.5 rounded-xl bg-slate-800/80 border border-slate-700">
+                <span class="text-[10px] text-slate-400 block font-medium">⚡ SEISMIC / RISK</span>
+                <span class="text-base font-black text-emerald-300">Normal</span>
+                <span class="text-[9px] text-slate-400 block font-semibold">Fault Inactive</span>
+              </div>
+            </div>
+
+            <!-- Official Safety Advisories -->
+            <div class="p-3 rounded-xl bg-slate-950/70 border border-slate-800 space-y-2 text-xs">
+              <span class="font-bold text-slate-300 block text-[11px]">🛡️ Official NDMA Citizen Safety Protocol:</span>
+              <ul class="space-y-1.5 text-[11px] text-slate-400">
+                <li class="flex items-start gap-1.5"><span class="text-emerald-400">✓</span> Move to upper floors or designated high-ground concrete shelters.</li>
+                <li class="flex items-start gap-1.5"><span class="text-emerald-400">✓</span> Disconnect electrical circuit breakers if water enters premises.</li>
+                <li class="flex items-start gap-1.5"><span class="text-emerald-400">✓</span> Do not attempt to cross flooded roads or drainage nullahs.</li>
+                <li class="flex items-start gap-1.5"><span class="text-emerald-400">✓</span> Keep mobile battery preserved; use SOS beacon only when extraction needed.</li>
+              </ul>
+            </div>
+          </div>
+        </div>
+
+        <!-- ================= TAB 3: 🤝 RESPOND (VOLUNTEER & COMMUNITY) ================= -->
+        <div id="tab-content-respond" class="hidden space-y-3.5">
+          <!-- Act as Volunteer Mode Card (Slide 1 & 2 Alignment) -->
+          <div class="rounded-3xl bg-slate-900 p-4 border border-slate-800 shadow-xl space-y-3">
+            <div class="flex items-center gap-2 text-amber-400 border-b border-slate-800 pb-2.5">
+              <span class="text-2xl">🤝</span>
+              <div>
+                <h3 class="font-black text-sm text-white">Community Responder: Act as Volunteer</h3>
+                <p class="text-[10px] text-slate-400">Match nearby assistance: Food, Funds, First Aid & Rescue Support.</p>
+              </div>
+            </div>
+
+            <form id="form-volunteer-register" onsubmit="submitVolunteerMode(event)" class="space-y-2.5 text-xs">
+              <div>
+                <label class="block text-slate-300 font-bold mb-1">Your Full Name:</label>
+                <input type="text" id="vol-name" required placeholder="e.g. Vikram Malhotra" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-amber-500">
+              </div>
+              <div class="grid grid-cols-2 gap-2">
+                <div>
+                  <label class="block text-slate-300 font-bold mb-1">Contact Phone:</label>
+                  <input type="tel" id="vol-phone" required placeholder="+91 98XXX XXXXX" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-amber-500">
+                </div>
+                <div>
+                  <label class="block text-slate-300 font-bold mb-1">Your Sector / Area:</label>
+                  <select id="vol-sector" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white font-semibold focus:outline-none focus:border-amber-500">
+                    <option value="Sector 1 - North Ridge">Sector 1 (North Ridge)</option>
+                    <option value="Sector 2 - East River">Sector 2 (East River)</option>
+                    <option value="Sector 3 - Metro Central" selected>Sector 3 (Metro Central)</option>
+                    <option value="Sector 4 - South Coast">Sector 4 (South Coast)</option>
+                  </select>
+                </div>
+              </div>
+              <div>
+                <label class="block text-slate-300 font-bold mb-1">How Can You Help? (Select Primary Role):</label>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <label class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-1.5 cursor-pointer hover:border-amber-500">
+                    <input type="checkbox" name="vol_skill" value="🍲 Food & Water Distribution" checked class="rounded text-amber-500">
+                    <span class="text-[11px] text-slate-200">🍲 Food & Water</span>
+                  </label>
+                  <label class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-1.5 cursor-pointer hover:border-amber-500">
+                    <input type="checkbox" name="vol_skill" value="🤝 Physical Rescue / Shovel" class="rounded text-amber-500">
+                    <span class="text-[11px] text-slate-200">🤝 Physical Help</span>
+                  </label>
+                  <label class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-1.5 cursor-pointer hover:border-amber-500">
+                    <input type="checkbox" name="vol_skill" value="🚤 Boat / 4x4 Transport" class="rounded text-amber-500">
+                    <span class="text-[11px] text-slate-200">🚤 Boat/Vehicle</span>
+                  </label>
+                  <label class="p-2 rounded-xl bg-slate-800 border border-slate-700 flex items-center gap-1.5 cursor-pointer hover:border-amber-500">
+                    <input type="checkbox" name="vol_skill" value="🩹 First Aid / Medical" class="rounded text-amber-500">
+                    <span class="text-[11px] text-slate-200">🩹 First Aid</span>
+                  </label>
+                </div>
+              </div>
+              <button type="submit" class="w-full py-2.5 rounded-2xl bg-gradient-to-r from-amber-600 to-orange-600 hover:from-amber-500 hover:to-orange-500 text-slate-950 font-black text-xs shadow-lg shadow-amber-950/60 transition active:scale-95">
+                🤝 REGISTER AS COMMUNITY VOLUNTEER
+              </button>
+            </form>
+          </div>
+
+          <!-- I Am Safe Check-in Card -->
+          <div class="rounded-3xl bg-slate-900 p-4 border border-slate-800 shadow-xl space-y-2.5">
+            <div class="flex items-center gap-2 text-emerald-400">
+              <span class="text-xl">🛡️</span>
+              <h3 class="font-black text-sm text-white">"I Am Safe" Family Registry</h3>
+            </div>
+            <p class="text-[10px] text-slate-400">Notify family and EOC controllers that your household is secure.</p>
+            <form id="form-safe-checkin" onsubmit="submitSafeCheckin(event)" class="space-y-2 text-xs">
+              <input type="text" id="safe-name" required placeholder="Your Name" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-emerald-500">
+              <div class="grid grid-cols-2 gap-2">
+                <input type="tel" id="safe-phone" required placeholder="Phone Number" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-emerald-500">
+                <input type="text" id="safe-location" placeholder="Safe Location / Camp" class="w-full px-3 py-2 rounded-xl bg-slate-800 border border-slate-700 text-white focus:outline-none focus:border-emerald-500">
+              </div>
+              <button type="submit" class="w-full py-2 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white font-bold text-xs transition">
+                ✓ Check-In as Safe
+              </button>
+            </form>
+          </div>
+        </div>
+
+        <!-- ================= TAB 4: 🔄 RECOVER (RELIEF & FACILITIES) ================= -->
+        <div id="tab-content-recover" class="hidden space-y-3.5">
+          <!-- Nearby Relief Camps & Hospitals -->
+          <div class="rounded-3xl bg-slate-900 p-4 border border-slate-800 shadow-xl space-y-3">
+            <div class="flex items-center justify-between">
+              <h3 class="font-black text-sm text-white flex items-center gap-1.5">
+                <span>🏥</span> Nearby Relief Camps & Trauma Care
+              </h3>
+              <span class="text-[10px] text-cyan-300 font-bold" id="help-dist-indicator">From Your GPS</span>
+            </div>
+            <p class="text-[11px] text-slate-400">Sorted by real-time distance from your satellite coordinates.</p>
+
+            <!-- Facilities List -->
+            <div id="facilities-list-container" class="space-y-2 pt-1 text-xs">
+              <!-- Dynamically rendered -->
+            </div>
+          </div>
+        </div>
+
+      </main>
+
+      <!-- Bottom Sticky Navigation Bar (Slide 1: INFORM • ALERT • RESPOND • RECOVER) -->
+      <nav class="bg-[#0b1120] border-t border-slate-800 px-2 py-1.5 flex items-center justify-around z-30 shadow-2xl">
+        <button onclick="switchAppTab('alert')" id="nav-btn-alert" class="nav-active flex-1 py-1 rounded-xl flex flex-col items-center justify-center text-slate-400 font-bold text-[10px] transition">
+          <span class="text-lg leading-none">⚡</span>
+          <span class="mt-1" id="nav-txt-alert">ALERT (SOS)</span>
+        </button>
+        <button onclick="switchAppTab('inform')" id="nav-btn-inform" class="flex-1 py-1 rounded-xl flex flex-col items-center justify-center text-slate-400 font-bold text-[10px] transition">
+          <span class="text-lg leading-none">📢</span>
+          <span class="mt-1" id="nav-txt-inform">INFORM</span>
+        </button>
+        <button onclick="switchAppTab('respond')" id="nav-btn-respond" class="flex-1 py-1 rounded-xl flex flex-col items-center justify-center text-slate-400 font-bold text-[10px] transition">
+          <span class="text-lg leading-none">🤝</span>
+          <span class="mt-1" id="nav-txt-respond">RESPOND</span>
+        </button>
+        <button onclick="switchAppTab('recover')" id="nav-btn-recover" class="flex-1 py-1 rounded-xl flex flex-col items-center justify-center text-slate-400 font-bold text-[10px] transition">
+          <span class="text-lg leading-none">🔄</span>
+          <span class="mt-1" id="nav-txt-recover">RECOVER</span>
+        </button>
+      </nav>
+
+      <!-- Fullscreen Strobe Layer (for Night Signaling) -->
+      <div id="screen-strobe-overlay" class="fixed inset-0 bg-white z-[9999] hidden pointer-events-auto">
+        <button onclick="toggleNightStrobe()" class="absolute top-6 right-6 px-4 py-2 rounded-full bg-black/80 text-white font-bold text-xs">
+          ✕ Stop Strobe
+        </button>
+        <div class="h-full flex items-center justify-center text-black font-black text-2xl tracking-widest text-center px-4">
+          🚨 NIGHT SOS STROBE ACTIVE 🚨
+        </div>
+      </div>
+
+    </div>
+  </div>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-box" class="fixed top-12 left-4 right-4 z-50 pointer-events-none flex flex-col gap-2 max-w-xs mx-auto"></div>
+
+  <!-- App Core Logic -->
+  <script>
+    const STORAGE_KEY = 'resqhub_disaster_state_v1';
+    const ACTIVE_SOS_KEY = 'resqhub_active_user_sos';
+
+    // Candidate base URLs for Phone <-> Laptop Command Center link
+    function getApiCandidates() {
+      const candidates = [];
+      // 1. Current origin if HTTP(S)
+      if (window.location.origin && window.location.origin.startsWith('http')) {
+        candidates.push(window.location.origin);
+      }
+      // 2. Previously remembered working server
+      const remembered = localStorage.getItem('RESQHUB_WORKING_SERVER');
+      if (remembered && !candidates.includes(remembered)) {
+        candidates.push(remembered);
+      }
+      // 3. Active Cloudflare tunnel
+      const cloudflareTunnel = 'https://ocean-won-lanka-centered.trycloudflare.com';
+      if (!candidates.includes(cloudflareTunnel)) {
+        candidates.push(cloudflareTunnel);
+      }
+      // 4. Local network candidates
+      const locals = [
+        'http://localhost:8080',
+        'http://127.0.0.1:8080',
+        'http://192.168.31.177:8080',
+        'http://10.198.189.64:8080'
+      ];
+      locals.forEach(l => {
+        if (!candidates.includes(l)) candidates.push(l);
+      });
+      return candidates;
+    }
+
+    async function resilientApiFetch(endpoint, options = {}) {
+      const candidates = getApiCandidates();
+      const cleanEp = endpoint.startsWith('/') ? endpoint : '/' + endpoint;
+
+      const tryFetch = async (base, timeoutMs = 2500) => {
+        const cleanBase = base.endsWith('/') ? base.slice(0, -1) : base;
+        const targetUrl = `${cleanBase}${cleanEp}`;
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), timeoutMs);
+        try {
+          const res = await fetch(targetUrl, { ...options, signal: controller.signal });
+          clearTimeout(timeout);
+          if (res.ok) {
+            localStorage.setItem('RESQHUB_WORKING_SERVER', cleanBase);
+            updateEocSyncBadge(true);
+            return res;
+          }
+          throw new Error(`HTTP ${res.status}`);
+        } catch (err) {
+          clearTimeout(timeout);
+          throw err;
+        }
+      };
+
+      // Try primary candidate immediately (fastest expected)
+      if (candidates.length > 0) {
+        try {
+          const firstRes = await tryFetch(candidates[0], 1200);
+          return firstRes;
+        } catch (e) {}
+      }
+
+      // Parallel race across all remaining candidates with Promise.any
+      const fallbacks = candidates.slice(1);
+      if (fallbacks.length === 0) {
+        updateEocSyncBadge(false);
+        throw new Error('Connection route offline');
+      }
+
+      try {
+        const fastestRes = await Promise.any(
+          fallbacks.map(cand => tryFetch(cand, 3000))
+        );
+        return fastestRes;
+      } catch (aggregateErr) {
+        updateEocSyncBadge(false);
+        throw new Error('All EOC server routes timed out');
+      }
+    }
+
+    function updateEocSyncBadge(isLinked) {
+      const badge = document.getElementById('sync-indicator-badge');
+      if (!badge) return;
+      if (isLinked) {
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-ping"></span> Laptop EOC Linked`;
+        badge.className = "text-[10px] text-emerald-400 font-bold ml-2 shrink-0 flex items-center gap-1";
+      } else {
+        badge.innerHTML = `<span class="w-1.5 h-1.5 rounded-full bg-amber-400 animate-pulse"></span> Offline Queue (Auto-Sync)`;
+        badge.className = "text-[10px] text-amber-400 font-bold ml-2 shrink-0 flex items-center gap-1";
+      }
+    }
+
+    function copyMobileUrl() {
+      const url = window.location.href.startsWith('http') ? window.location.href : 'https://jacob-situations-applicant-sims.trycloudflare.com/user.html';
+      navigator.clipboard.writeText(url).then(() => {
+        showToast("📋 Copied citizen mobile link!", "success");
+      }).catch(() => {
+        prompt("Copy this phone link:", url);
+      });
+    }
+
+    // State Variables
+    let userCoords = { lat: 19.0760, lng: 72.8550, accuracy: 5 };
+    let selectedSituation = "🌊 Water Rising / Flood Trapped";
+    let activeSos = null;
+    let pollInterval = null;
+    let isHindi = false;
+    let isStrobeOn = false;
+    let isWhistleOn = false;
+    let whistleOsc = null;
+    let whistleCtx = null;
+    let batteryLevel = "100%";
+
+    // Emergency Facilities Database (Haversine distance calculated dynamically)
+    const SHELTERS = [
+      { id: "sh-1", name: "St. Jude High School Relief Camp", type: "Mega Shelter", lat: 19.0720, lng: 72.8610, phone: "+91 98201 11223", capacity: "450 beds" },
+      { id: "sh-2", name: "Metro Sports Arena Evacuation Hub", type: "Food & Shelter", lat: 19.0810, lng: 72.8490, phone: "+91 98202 22334", capacity: "1,200 beds" },
+      { id: "sh-3", name: "General Disaster Trauma Hospital", type: "Emergency ICU", lat: 19.0690, lng: 72.8505, phone: "+91 98203 33445", capacity: "24/7 Trauma" },
+      { id: "sh-4", name: "Sector 4 Clean Water & Food Depot", type: "Water Tankers", lat: 19.0780, lng: 72.8640, phone: "+91 98204 44556", capacity: "Drinking Water" }
+    ];
+
+    // Language Dictionary (English & Hindi)
+    const I18N = {
+      en: {
+        badge: "CITIZEN SOS",
+        banner: "Cyclone & Surge Alert: Sectors 1, 3 & 4",
+        sosBadge: "⚡ EMERGENCY RESCUE NEEDED?",
+        sosTitle: "Tap To Broadcast Distress",
+        sosSub: "Sends your live satellite GPS location directly to Laptop EOC & NDRF boats.",
+        tapBtn: "TAP SOS",
+        sendRescue: "SEND RESCUE",
+        gpsLocked: "GPS Fix Locked:",
+        situation: "Select Emergency Situation:",
+        optional: "📝 Add Name / Trapped Count (Optional)",
+        navSos: "SOS Distress",
+        navSafe: "I'm Safe",
+        navHelp: "Near Help",
+        safeTitle: '"I Am Safe" Family Check-In'
+      },
+      hi: {
+        badge: "नागरिक आपातकाल",
+        banner: "⚠️ चक्रवात चेतावनी: सेक्टर 1, 3 और 4 जलमग्न",
+        sosBadge: "⚡ क्या आपको तुरंत बचाव चाहिए?",
+        sosTitle: "मदद के लिए SOS बटन दबाएं",
+        sosSub: "आपकी सटीक GPS लोकेशन लैपटॉप कमांड सेंटर और NDRF नावों तक तुरंत पहुंचेगी।",
+        tapBtn: "SOS दबाएं",
+        sendRescue: "बचाव दल बुलाएं",
+        gpsLocked: "सटीक GPS लोकेशन:",
+        situation: "आपातकालीन स्थिति चुनें:",
+        optional: "📝 नाम व लोगों की संख्या (वैकल्पिक)",
+        navSos: "SOS मदद",
+        navSafe: "मैं सुरक्षित हूं",
+        navHelp: "पास के राहत शिविर",
+        safeTitle: '"मैं सुरक्षित हूं" परिवार सूचना'
+      }
+    };
+
+    // Toggle English / Hindi
+    function toggleLanguage() {
+      isHindi = !isHindi;
+      const btn = document.getElementById('btn-lang');
+      if (btn) btn.innerText = isHindi ? "English" : "हिंदी";
+
+      const l = isHindi ? I18N.hi : I18N.en;
+      document.getElementById('header-badge-role').innerText = l.badge;
+      document.getElementById('txt-disaster-banner').innerText = l.banner;
+      document.getElementById('lbl-sos-badge').innerText = l.sosBadge;
+      document.getElementById('txt-sos-title').innerText = l.sosTitle;
+      document.getElementById('txt-sos-subtitle').innerText = l.sosSub;
+      document.getElementById('txt-hero-sos-btn').innerText = l.tapBtn;
+      document.getElementById('txt-hero-sos-sub').innerText = l.sendRescue;
+      document.getElementById('txt-gps-coord-label').innerText = l.gpsLocked;
+      document.getElementById('lbl-situation-title').innerText = l.situation;
+      document.getElementById('lbl-optional-details').innerText = l.optional;
+      document.getElementById('nav-txt-sos').innerText = l.navSos;
+      document.getElementById('nav-txt-safe').innerText = l.navSafe;
+      document.getElementById('nav-txt-help').innerText = l.navHelp;
+      document.getElementById('txt-safe-title').innerText = l.safeTitle;
+
+      showToast(isHindi ? "भाषा बदलकर हिंदी की गई" : "Language switched to English", "info");
+    }
+
+    // Geolocation Activation
+    function initGPS() {
+      if ('geolocation' in navigator) {
+        navigator.geolocation.getCurrentPosition(
+          (pos) => {
+            userCoords.lat = pos.coords.latitude;
+            userCoords.lng = pos.coords.longitude;
+            userCoords.accuracy = Math.round(pos.coords.accuracy || 4);
+            updateGpsUI();
+            renderFacilities();
+          },
+          (err) => {
+            console.warn("GPS notice:", err.message);
+            updateGpsUI();
+            renderFacilities();
+          },
+          { enableHighAccuracy: true, timeout: 7000, maximumAge: 30000 }
+        );
+
+        navigator.geolocation.watchPosition(
+          (pos) => {
+            userCoords.lat = pos.coords.latitude;
+            userCoords.lng = pos.coords.longitude;
+            userCoords.accuracy = Math.round(pos.coords.accuracy || 4);
+            updateGpsUI();
+            renderFacilities();
+          },
+          null,
+          { enableHighAccuracy: true, maximumAge: 5000 }
+        );
+      } else {
+        updateGpsUI();
+        renderFacilities();
+      }
+    }
+
+    function updateGpsUI() {
+      const headerText = document.getElementById('gps-header-text');
+      const coordEl = document.getElementById('display-gps-coords');
+      const accEl = document.getElementById('display-gps-acc');
+
+      if (headerText) headerText.innerText = `GPS: Locked (${userCoords.lat.toFixed(4)}, ${userCoords.lng.toFixed(4)})`;
+      if (coordEl) coordEl.innerText = `${userCoords.lat.toFixed(5)}, ${userCoords.lng.toFixed(5)}`;
+      if (accEl) accEl.innerText = `🎯 ±${userCoords.accuracy}m Accuracy`;
+    }
+
+    // Battery API query
+    if ('getBattery' in navigator) {
+      navigator.getBattery().then(bat => {
+        batteryLevel = `${Math.round(bat.level * 100)}%`;
+        const el = document.getElementById('phone-battery-pill');
+        if (el) el.innerText = `🔋 ${batteryLevel}`;
+        bat.addEventListener('levelchange', () => {
+          batteryLevel = `${Math.round(bat.level * 100)}%`;
+          if (el) el.innerText = `🔋 ${batteryLevel}`;
+        });
+      }).catch(() => {});
+    }
+
+    // Clock
+    setInterval(() => {
+      const d = new Date();
+      const clockEl = document.getElementById('phone-clock');
+      if (clockEl) {
+        clockEl.innerText = d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+      }
+    }, 1000);
+
+    // Audio synthesizer for alarms and whistle
+    function playAudioAlert(type = 'sos') {
+      try {
+        const AudioClass = window.AudioContext || window.webkitAudioContext;
+        if (!AudioClass) return;
+        const ctx = new AudioClass();
+        const osc = ctx.createOscillator();
+        const gain = ctx.createGain();
+        osc.connect(gain);
+        gain.connect(ctx.destination);
+
+        if (type === 'sos') {
+          osc.type = 'sawtooth';
+          osc.frequency.setValueAtTime(880, ctx.currentTime);
+          osc.frequency.exponentialRampToValueAtTime(440, ctx.currentTime + 0.35);
+          gain.gain.setValueAtTime(0.4, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.4);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.4);
+        } else if (type === 'dispatched') {
+          osc.type = 'sine';
+          osc.frequency.setValueAtTime(523.25, ctx.currentTime); // C5
+          osc.frequency.setValueAtTime(659.25, ctx.currentTime + 0.15); // E5
+          osc.frequency.setValueAtTime(783.99, ctx.currentTime + 0.3); // G5
+          gain.gain.setValueAtTime(0.3, ctx.currentTime);
+          gain.gain.linearRampToValueAtTime(0.01, ctx.currentTime + 0.45);
+          osc.start();
+          osc.stop(ctx.currentTime + 0.45);
+        }
+      } catch (e) {}
+    }
+
+    // Category Selector
+    function selectSosCategory(btn, category) {
+      selectedSituation = category;
+      document.querySelectorAll('.sos-cat-btn').forEach(b => {
+        b.className = "sos-cat-btn p-2.5 rounded-xl border border-slate-800 bg-slate-850 text-slate-300 font-medium text-left flex items-center gap-1.5 hover:border-slate-700 transition";
+      });
+      btn.className = "sos-cat-btn p-2.5 rounded-xl border border-red-500 bg-red-950/60 text-red-200 font-bold text-left flex items-center gap-1.5 transition shadow";
+    }
+
+    // ============================================
+    // SHAKE ×2 ACCELEROMETER EMERGENCY TRIGGER ENGINE (Slide 1 & 2)
+    // ============================================
+    let lastShakeTime = 0;
+    let shakeCount = 0;
+    let shakeResetTimer = null;
+    const SHAKE_THRESHOLD = 17; // m/s^2 acceleration threshold
+
+    function initShakeDetection() {
+      if (window.DeviceMotionEvent) {
+        if (typeof DeviceMotionEvent.requestPermission === 'function') {
+          window.addEventListener('touchstart', function requestIosMotion() {
+            DeviceMotionEvent.requestPermission()
+              .then(state => {
+                if (state === 'granted') {
+                  window.addEventListener('devicemotion', handleDeviceMotion, false);
+                }
+              })
+              .catch(console.warn);
+            window.removeEventListener('touchstart', requestIosMotion);
+          }, { once: true });
+        } else {
+          window.addEventListener('devicemotion', handleDeviceMotion, false);
+        }
+      }
+    }
+
+    function handleDeviceMotion(event) {
+      const acc = event.accelerationIncludingGravity || event.acceleration;
+      if (!acc) return;
+      const x = acc.x || 0;
+      const y = acc.y || 0;
+      const z = acc.z || 0;
+      const totalAcc = Math.sqrt(x*x + y*y + z*z);
+
+      if (totalAcc > SHAKE_THRESHOLD) {
+        const now = Date.now();
+        if (now - lastShakeTime > 350) {
+          lastShakeTime = now;
+          shakeCount++;
+          
+          const badge = document.getElementById('shake-status-badge');
+          if (badge) {
+            badge.innerHTML = `<span>📳 Shake 1/2 Detected! Shake once more for instant SOS!</span>`;
+            badge.className = "font-black text-amber-200 text-xs flex items-center gap-1.5 animate-pulse";
+          }
+          if (navigator.vibrate) navigator.vibrate(120);
+
+          if (shakeResetTimer) clearTimeout(shakeResetTimer);
+          shakeResetTimer = setTimeout(() => {
+            shakeCount = 0;
+            if (badge) {
+              badge.innerHTML = `<span>SHAKE ×2 SENSOR: ACTIVE</span><span class="px-1.5 py-0.2 rounded bg-amber-400 text-slate-950 text-[9px] font-black uppercase">AUTO SOS</span>`;
+              badge.className = "font-black text-amber-200 text-xs flex items-center gap-1.5";
+            }
+          }, 1800);
+
+          if (shakeCount >= 2) {
+            shakeCount = 0;
+            if (shakeResetTimer) clearTimeout(shakeResetTimer);
+            if (badge) badge.innerHTML = `<span>🚨 SHAKE ×2 TRIGGERED! Broadcasting SOS...</span>`;
+            if (!activeSos) {
+              triggerCitizenSos('shake');
+            }
+          }
+        }
+      }
+    }
+
+    function simulateShakeSos() {
+      showToast("📳 Shake ×2 Motion Simulated! Triggering Emergency SOS...", "alert");
+      triggerCitizenSos('shake');
+    }
+
+    // ⚡ TRIGGER CITIZEN SOS BEACON (BUTTON OR SHAKE ×2)
+    async function triggerCitizenSos(triggerMethod = 'button') {
+      playAudioAlert('sos');
+
+      // Vibrate phone pattern if supported (SOS pattern in morse)
+      if (navigator.vibrate) {
+        navigator.vibrate([400, 150, 400, 150, 600]);
+      }
+
+      const nameVal = document.getElementById('input-sos-name')?.value.trim();
+      const phoneVal = document.getElementById('input-sos-phone')?.value.trim();
+      const countVal = parseInt(document.getElementById('input-sos-count')?.value || '3', 10);
+      const landmarkVal = document.getElementById('input-sos-landmark')?.value.trim();
+
+      const isShake = (triggerMethod === 'shake');
+      const triggerLabel = isShake ? '⚡ SHAKE ×2 MOTION TRIGGER' : '⚡ 1-TAP PANIC BUTTON';
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      const dateStr = now.toLocaleDateString([], { day: '2-digit', month: 'short' });
+      const fullTimestamp = `${timeStr} (${dateStr})`;
+
+      const sosId = 'sos-' + Math.floor(1000 + Math.random() * 9000);
+      const sosRecord = {
+        id: sosId,
+        timestamp: fullTimestamp,
+        time: timeStr,
+        timestampIso: now.toISOString(),
+        name: nameVal || (isShake ? "Citizen (Shake ×2 Trigger)" : "Smartphone Citizen (Emergency)"),
+        phone: phoneVal || "+91 Mobile Emergency",
+        priority: "CRITICAL",
+        peopleTrapped: countVal || 1,
+        hasInjuries: true,
+        lat: userCoords.lat,
+        lng: userCoords.lng,
+        accuracyMeters: userCoords.accuracy,
+        battery: batteryLevel,
+        address: landmarkVal || `Satellite GPS (${userCoords.lat.toFixed(4)}, ${userCoords.lng.toFixed(4)})`,
+        needs: [selectedSituation, "Immediate Extraction", isShake ? "Shake ×2 Sensor Trigger" : "Panic Button"],
+        status: "Pending Dispatch",
+        assignedUnit: "Unassigned",
+        triggerMethod: isShake ? "SHAKE_X2" : "PANIC_BUTTON",
+        notes: `${triggerLabel}. Situation: ${selectedSituation}. Trapped count: ${countVal}. Battery: ${batteryLevel}. Accuracy: ±${userCoords.accuracy}m.`
+      };
+
+      activeSos = sosRecord;
+      activeSos.delivered = false;
+      localStorage.setItem(ACTIVE_SOS_KEY, JSON.stringify(activeSos));
+      renderActiveBeacon(activeSos);
+
+      // Transmit to Central Laptop Server using resilient multi-route fetch
+      let delivered = false;
+      try {
+        const res = await resilientApiFetch('/api/sos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(sosRecord)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success) delivered = true;
+        }
+      } catch (err) {
+        console.warn("Could not immediately reach central laptop, queued locally:", err);
+      }
+
+      if (delivered) {
+        activeSos.delivered = true;
+        localStorage.setItem(ACTIVE_SOS_KEY, JSON.stringify(activeSos));
+        renderActiveBeacon(activeSos);
+        showToast("🚨 SOS DELIVERED TO LAPTOP COMMAND CENTER! Siren sounding at EOC.", "alert");
+      } else {
+        showToast("⚠️ SOS saved to phone & queued! Auto-syncing to Laptop EOC...", "info");
+      }
+
+      // Start rapid polling to retry sending and listen for Laptop Admin Dispatch
+      startDispatchPolling();
+    }
+
+    // Manual or auto retry transmitting unacknowledged distress beacon
+    async function retryTransmitUserSos() {
+      if (!activeSos) return;
+      showToast("📡 Connecting to Laptop EOC...", "info");
+      try {
+        const res = await resilientApiFetch('/api/sos', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(activeSos)
+        });
+        if (res.ok) {
+          const data = await res.json();
+          if (data && data.success) {
+            activeSos.delivered = true;
+            localStorage.setItem(ACTIVE_SOS_KEY, JSON.stringify(activeSos));
+            renderActiveBeacon(activeSos);
+            playAudioAlert('dispatched');
+            showToast("🚨 CONNECTED! SOS Delivered to Laptop Command Center! Siren sounding.", "alert");
+          }
+        }
+      } catch(e) {
+        showToast("⚠️ Retrying laptop link in background...", "info");
+      }
+    }
+
+    function renderActiveBeacon(sos) {
+      const card = document.getElementById('card-active-beacon');
+      const badge = document.getElementById('live-beacon-id');
+      const timeBadge = document.getElementById('live-beacon-timestamp');
+      if (card) card.classList.remove('hidden');
+      if (badge) badge.innerText = `#${sos.id.toUpperCase()}`;
+      if (timeBadge) timeBadge.innerText = sos.timestamp || 'Just now';
+
+      // Step 1: Distress Delivery
+      const step1 = document.getElementById('pipeline-step-1');
+      const step1Icon = document.getElementById('pipeline-step-1-icon');
+      const step1Title = document.getElementById('pipeline-step-1-title');
+      const step1Time = document.getElementById('pipeline-step-1-time');
+      if (sos.delivered !== false) {
+        if (step1) step1.className = "flex items-center gap-2.5 text-xs text-emerald-400 font-semibold";
+        if (step1Icon) {
+          step1Icon.innerText = "✓";
+          step1Icon.className = "w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500 flex items-center justify-center text-[10px]";
+        }
+        if (step1Title) step1Title.innerText = "1. Distress Signal Delivered to Laptop EOC";
+        if (step1Time) step1Time.innerText = `✓ Synced (${sos.time || 'Live'})`;
+      } else {
+        if (step1) step1.className = "flex items-center gap-2.5 text-xs text-amber-400 font-semibold";
+        if (step1Icon) {
+          step1Icon.innerText = "⏳";
+          step1Icon.className = "w-5 h-5 rounded-full bg-amber-500/20 border border-amber-500 text-amber-400 flex items-center justify-center text-[10px] animate-pulse";
+        }
+        if (step1Title) step1Title.innerHTML = '1. Saved to Phone <span class="text-[10px] text-amber-300 font-bold">(Auto-syncing...)</span>';
+        if (step1Time) step1Time.innerHTML = '<button onclick="retryTransmitUserSos()" class="px-1.5 py-0.5 rounded bg-red-600 text-white text-[9px] font-black">Retry</button>';
+      }
+
+      // Step 2: EOC Alerted
+      const step2 = document.getElementById('pipeline-step-2');
+      const step2Icon = document.getElementById('pipeline-step-2-icon');
+      const step2Badge = document.getElementById('pipeline-step-2-badge');
+      if (sos.delivered !== false) {
+        if (step2) step2.className = "flex items-center gap-2.5 text-xs text-emerald-400 font-semibold";
+        if (step2Icon) {
+          step2Icon.innerText = "✓";
+          step2Icon.className = "w-5 h-5 rounded-full bg-emerald-500/20 border border-emerald-500 flex items-center justify-center text-[10px]";
+        }
+        if (step2Badge) {
+          step2Badge.innerText = "Ringing";
+          step2Badge.className = "text-[10px] text-emerald-400 font-bold";
+        }
+      } else {
+        if (step2) step2.className = "flex items-center gap-2.5 text-xs text-slate-500 font-medium";
+        if (step2Icon) {
+          step2Icon.innerText = "2";
+          step2Icon.className = "w-5 h-5 rounded-full bg-slate-800 border border-slate-700 flex items-center justify-center text-[10px]";
+        }
+        if (step2Badge) {
+          step2Badge.innerText = "Queued";
+          step2Badge.className = "text-[10px] text-slate-500 font-medium";
+        }
+      }
+
+      // Update pipeline if unit dispatched
+      const step3 = document.getElementById('pipeline-step-3');
+      const title3 = document.getElementById('pipeline-dispatch-title');
+      const detail3 = document.getElementById('pipeline-dispatch-detail');
+
+      if (sos.status === 'Dispatched' && sos.assignedUnit && sos.assignedUnit !== 'Unassigned') {
+        if (step3) step3.className = "flex items-center gap-2.5 text-xs text-emerald-400 font-bold";
+        if (title3) title3.innerText = `🚀 3. UNIT DISPATCHED: ${sos.assignedUnit}`;
+        if (detail3) detail3.innerText = `En route to coordinates (${sos.lat.toFixed(4)}, ${sos.lng.toFixed(4)})`;
+      } else {
+        if (step3) step3.className = "flex items-center gap-2.5 text-xs font-semibold";
+        if (title3) title3.innerText = "3. Awaiting Admin Unit Dispatch";
+        if (detail3) detail3.innerText = "Laptop Incident Commander is selecting your rescue team...";
+      }
+    }
+
+    // Cancel SOS
+    function cancelActiveSos() {
+      if (confirm("Are you sure you want to cancel this emergency distress beacon?")) {
+        localStorage.removeItem(ACTIVE_SOS_KEY);
+        activeSos = null;
+        document.getElementById('card-active-beacon').classList.add('hidden');
+        showToast("Distress beacon cancelled.", "info");
+      }
+    }
+
+    // Rapid two-way poll: Retries unacknowledged SOS and listens for Laptop Admin Dispatch
+    function startDispatchPolling() {
+      if (pollInterval) clearInterval(pollInterval);
+      pollInterval = setInterval(async () => {
+        if (!activeSos) return;
+
+        // Auto-retry SOS transmission if it was queued offline
+        if (!activeSos.delivered) {
+          try {
+            const res = await resilientApiFetch('/api/sos', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(activeSos)
+            });
+            if (res.ok) {
+              const data = await res.json();
+              if (data && data.success) {
+                activeSos.delivered = true;
+                localStorage.setItem(ACTIVE_SOS_KEY, JSON.stringify(activeSos));
+                renderActiveBeacon(activeSos);
+                playAudioAlert('dispatched');
+                showToast("🚨 CONNECTED: SOS transmitted to Laptop Command Center! Siren sounding.", "alert");
+              }
+            }
+          } catch(e) {}
+        }
+
+        // Poll for Laptop Admin Dispatch
+        try {
+          const res = await resilientApiFetch('/api/data', { cache: 'no-store' });
+          if (!res.ok) return;
+          const data = await res.json();
+          if (data && data.sosAlerts) {
+            const match = data.sosAlerts.find(s => s && s.id === activeSos.id);
+            if (match) {
+              if (match.status !== activeSos.status || match.assignedUnit !== activeSos.assignedUnit) {
+                const isNewDispatch = (match.status === 'Dispatched' && activeSos.status !== 'Dispatched');
+                activeSos.status = match.status;
+                activeSos.assignedUnit = match.assignedUnit;
+                localStorage.setItem(ACTIVE_SOS_KEY, JSON.stringify(activeSos));
+                renderActiveBeacon(activeSos);
+
+                if (isNewDispatch) {
+                  playAudioAlert('dispatched');
+                  if (navigator.vibrate) navigator.vibrate([200, 100, 200, 100, 400]);
+                  showToast(`🚀 COMMAND CENTER DISPATCHED: "${match.assignedUnit}" is on the way!`, "success");
+                }
+              }
+            }
+          }
+        } catch (e) {}
+      }, 1200);
+    }
+
+    // Auto retry when network reconnects
+    window.addEventListener('online', () => {
+      updateEocSyncBadge(true);
+      if (activeSos && !activeSos.delivered) {
+        retryTransmitUserSos();
+      }
+    });
+
+    // Safe Check-in
+    async function submitSafeCheckin(e) {
+      e.preventDefault();
+      const name = document.getElementById('safe-name').value.trim();
+      const phone = document.getElementById('safe-phone').value.trim();
+      const count = parseInt(document.getElementById('safe-count').value || '1', 10);
+      const loc = document.getElementById('safe-location').value.trim();
+      const notes = document.getElementById('safe-notes').value.trim();
+
+      const chk = {
+        id: "chk-" + Math.floor(1000 + Math.random() * 9000),
+        timestamp: "Just now",
+        name: name,
+        phone: phone,
+        familyCount: count,
+        status: "Safe",
+        location: loc || "Field Safe Zone",
+        notes: notes || "Registered safe via Citizen Mobile Portal."
+      };
+
+      try {
+        await resilientApiFetch('/api/checkin', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(chk)
+        });
+      } catch(err) {
+        console.warn("Check-in queued locally:", err);
+      }
+
+      document.getElementById('form-safe-checkin').reset();
+      showToast("✅ Registered as safe! Synced with Central EOC Command.", "success");
+      switchAppTab('sos');
+    }
+
+    // Haversine Distance
+    function calcDistance(lat1, lon1, lat2, lon2) {
+      const R = 6371;
+      const dLat = (lat2 - lat1) * Math.PI / 180;
+      const dLon = (lon2 - lon1) * Math.PI / 180;
+      const a = Math.sin(dLat / 2) * Math.sin(dLat / 2) + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLon / 2) * Math.sin(dLon / 2);
+      const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+      const km = R * c;
+      return km < 1 ? `${Math.round(km * 1000)}m` : `${km.toFixed(1)} km`;
+    }
+
+    function renderFacilities() {
+      const container = document.getElementById('facilities-list-container');
+      if (!container) return;
+      container.innerHTML = '';
+
+      SHELTERS.forEach(s => {
+        const dist = calcDistance(userCoords.lat, userCoords.lng, s.lat, s.lng);
+        const card = document.createElement('div');
+        card.className = "p-3 rounded-2xl bg-slate-800/80 border border-slate-700/80 flex items-center justify-between gap-2 shadow";
+        card.innerHTML = `
+          <div>
+            <div class="font-bold text-white text-xs">${s.name}</div>
+            <div class="text-[10px] text-slate-400 mt-0.5 flex items-center gap-2">
+              <span class="text-amber-300 font-semibold">${s.type}</span>
+              <span>•</span>
+              <span class="text-emerald-300 font-bold">📍 ${dist} away</span>
+            </div>
+          </div>
+          <div class="flex items-center gap-1.5 shrink-0">
+            <a href="https://www.google.com/maps?q=${s.lat},${s.lng}" target="_blank" class="px-2.5 py-1.5 rounded-xl bg-slate-700 hover:bg-slate-600 text-slate-200 text-[10px] font-bold">
+              🗺️ Nav
+            </a>
+            <a href="tel:${s.phone}" class="px-2.5 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-[10px] font-bold">
+              📞 Call
+            </a>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+    }
+
+    // 4 Pillars Tab Navigation (Slide 1: INFORM, ALERT, RESPOND, RECOVER)
+    function switchAppTab(tabId) {
+      // Normalize aliases
+      if (tabId === 'sos') tabId = 'alert';
+      if (tabId === 'safe') tabId = 'respond';
+      if (tabId === 'help') tabId = 'recover';
+
+      const tabs = ['alert', 'inform', 'respond', 'recover'];
+      tabs.forEach(t => {
+        const content = document.getElementById(`tab-content-${t}`);
+        const btn = document.getElementById(`nav-btn-${t}`);
+        if (content) content.classList.toggle('hidden', t !== tabId);
+        if (btn) {
+          if (t === tabId) {
+            btn.className = "nav-active flex-1 py-1.5 rounded-xl flex flex-col items-center justify-center text-slate-300 font-bold text-[10px] transition";
+          } else {
+            btn.className = "flex-1 py-1.5 rounded-xl flex flex-col items-center justify-center text-slate-400 font-medium text-[10px] transition hover:text-white";
+          }
+        }
+      });
+
+      if (tabId === 'recover') renderFacilities();
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    // Community Responder: Act as Volunteer Submission
+    async function submitVolunteerMode(e) {
+      e.preventDefault();
+      const name = document.getElementById('vol-name')?.value.trim();
+      const phone = document.getElementById('vol-phone')?.value.trim();
+      const sector = document.getElementById('vol-sector')?.value;
+      const skills = Array.from(document.querySelectorAll('input[name="vol_skill"]:checked')).map(c => c.value);
+
+      const now = new Date();
+      const timeStr = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit', hour12: true });
+      const record = {
+        id: "vol-" + Math.floor(1000 + Math.random() * 9000),
+        timestamp: `${timeStr} (${now.toLocaleDateString([], { day: '2-digit', month: 'short' })})`,
+        name: name || "Volunteer Responder",
+        phone: phone || "+91 Field Volunteer",
+        sector: sector,
+        skills: skills.length > 0 ? skills : ["Food & Water Distribution"],
+        status: "Active Volunteer",
+        location: sector || "Field Active",
+        notes: `Community Volunteer Registered. Skills: ${skills.join(', ')}.`
+      };
+
+      try {
+        await resilientApiFetch('/api/volunteer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify(record)
+        });
+      } catch(err) {
+        console.warn("Volunteer queued locally:", err);
+      }
+
+      document.getElementById('form-volunteer-register').reset();
+      showToast(`🤝 Thank you ${name}! You are registered as an EPICENTER Volunteer.`, "success");
+      switchAppTab('alert');
+    }
+
+    // Night Strobe Flashlight
+    function toggleNightStrobe() {
+      isStrobeOn = !isStrobeOn;
+      const overlay = document.getElementById('screen-strobe-overlay');
+      if (overlay) {
+        if (isStrobeOn) {
+          overlay.classList.remove('hidden');
+          overlay.classList.add('emergency-strobe');
+        } else {
+          overlay.classList.add('hidden');
+          overlay.classList.remove('emergency-strobe');
+        }
+      }
+    }
+
+    // Acoustic Whistle
+    function toggleRescueWhistle() {
+      isWhistleOn = !isWhistleOn;
+      const txt = document.getElementById('txt-whistle');
+      const icon = document.getElementById('icon-whistle');
+
+      if (isWhistleOn) {
+        try {
+          const AudioClass = window.AudioContext || window.webkitAudioContext;
+          whistleCtx = new AudioClass();
+          whistleOsc = whistleCtx.createOscillator();
+          const gain = whistleCtx.createGain();
+          whistleOsc.type = 'triangle';
+          whistleOsc.frequency.setValueAtTime(2800, whistleCtx.currentTime); // High pitch rescue whistle
+          gain.gain.setValueAtTime(0.5, whistleCtx.currentTime);
+          whistleOsc.connect(gain);
+          gain.connect(whistleCtx.destination);
+          whistleOsc.start();
+          if (txt) txt.innerText = "Stop Whistle";
+          if (icon) icon.innerText = "🛑";
+        } catch (e) {}
+      } else {
+        if (whistleOsc) {
+          try { whistleOsc.stop(); } catch(e) {}
+          whistleOsc = null;
+        }
+        if (txt) txt.innerText = "Rescue Whistle";
+        if (icon) icon.innerText = "🔊";
+      }
+    }
+
+    // Device Mockup Toggle for Desktop
+    function toggleDeviceMockup() {
+      const frame = document.getElementById('phone-frame');
+      const wrapper = document.getElementById('phone-wrapper');
+      const btn = document.getElementById('btn-toggle-frame');
+
+      if (frame.classList.contains('phone-device-frame')) {
+        frame.classList.remove('phone-device-frame');
+        wrapper.classList.remove('phone-wrapper-mode');
+        frame.style.width = '100%';
+        frame.style.maxWidth = '480px';
+        frame.style.margin = '0 auto';
+        frame.style.minHeight = '100vh';
+        btn.innerText = "📱 Phone Mockup View";
+      } else {
+        frame.classList.add('phone-device-frame');
+        wrapper.classList.add('phone-wrapper-mode');
+        frame.style.width = '';
+        frame.style.maxWidth = '';
+        frame.style.margin = '';
+        frame.style.minHeight = '';
+        btn.innerText = "🖥️ Fullscreen View";
+      }
+    }
+
+    // Copy URL
+    function copyMobileUrl() {
+      const url = window.location.href;
+      if (navigator.clipboard) {
+        navigator.clipboard.writeText(url);
+        showToast("📋 Link copied! Open on your smartphone.", "info");
+      } else {
+        prompt("Copy this URL to open on your phone:", url);
+      }
+    }
+
+    // Toast helper
+    function showToast(msg, type = 'info') {
+      const container = document.getElementById('toast-box');
+      if (!container) return;
+      const t = document.createElement('div');
+      const col = type === 'alert' ? 'bg-red-950 border-red-500 text-red-100' :
+                 (type === 'success' ? 'bg-emerald-950 border-emerald-500 text-emerald-100' : 'bg-slate-900 border-slate-700 text-white');
+      t.className = `p-3 rounded-2xl border shadow-2xl text-xs font-semibold flex items-center gap-2 ${col}`;
+      t.innerHTML = `<span>${type === 'alert' ? '🚨' : (type === 'success' ? '🚀' : 'ℹ️')}</span><span class="flex-1">${msg}</span>`;
+      container.appendChild(t);
+      setTimeout(() => t.remove(), 4000);
+    }
+
+    // Check on startup for existing active SOS in localStorage
+    window.addEventListener('DOMContentLoaded', () => {
+      initGPS();
+      initShakeDetection();
+      const saved = localStorage.getItem(ACTIVE_SOS_KEY);
+      if (saved) {
+        try {
+          activeSos = JSON.parse(saved);
+          renderActiveBeacon(activeSos);
+          startDispatchPolling();
+        } catch(e) {}
+      }
+    });
+  </script>
+
+  <!-- Service worker registration -->
+  <script>
+    if ('serviceWorker' in navigator) {
+      window.addEventListener('load', () => {
+        navigator.serviceWorker.register('./sw.js').catch(() => {});
+      });
+    }
+  </script>
+</body>
+</html>

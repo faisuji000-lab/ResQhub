@@ -1,0 +1,301 @@
+/* Custom styles and animations for ResQHub */
+
+@keyframes pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  80%, 100% {
+    transform: scale(2.4);
+    opacity: 0;
+  }
+}
+
+@keyframes flash-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px rgba(239, 68, 68, 0.6);
+  }
+  50% {
+    box-shadow: 0 0 24px rgba(239, 68, 68, 0.95);
+  }
+}
+
+@keyframes user-pulse-ring {
+  0% {
+    transform: scale(0.8);
+    opacity: 1;
+  }
+  80%, 100% {
+    transform: scale(2.6);
+    opacity: 0;
+  }
+}
+
+/* Pulsing radar effect for SOS map markers */
+.sos-marker-container {
+  position: relative;
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.sos-marker-pulse {
+  position: absolute;
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background-color: rgba(239, 68, 68, 0.7);
+  animation: pulse-ring 1.8s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.sos-marker-core {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #ef4444;
+  border: 2.5px solid #ffffff;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.35);
+  animation: flash-glow 2s ease-in-out infinite;
+}
+
+/* User Live GPS Location Marker */
+.user-marker-container {
+  position: relative;
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.user-marker-pulse {
+  position: absolute;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background-color: rgba(59, 130, 246, 0.65);
+  animation: user-pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+.user-marker-core {
+  position: relative;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background-color: #2563eb;
+  border: 3px solid #ffffff;
+  box-shadow: 0 0 12px rgba(59, 130, 246, 0.9);
+}
+
+/* USGS Real-time Earthquake markers */
+.usgs-marker-container {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.usgs-marker-core {
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.85);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 800;
+  font-family: monospace;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.6);
+  cursor: pointer;
+  transition: transform 0.2s ease;
+}
+
+.usgs-marker-core:hover {
+  transform: scale(1.25);
+  z-index: 1000 !important;
+}
+
+/* Shelter markers */
+.shelter-marker-icon {
+  background-color: #10b981;
+  border: 2px solid #ffffff;
+  color: white;
+  border-radius: 50%;
+  width: 26px !important;
+  height: 26px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  font-weight: bold;
+  font-size: 11px;
+}
+
+.shelter-marker-full {
+  background-color: #f59e0b;
+}
+
+/* Hospital markers */
+.hospital-marker-icon {
+  background-color: #3b82f6;
+  border: 2px solid #ffffff;
+  color: white;
+  border-radius: 50%;
+  width: 26px !important;
+  height: 26px !important;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  box-shadow: 0 2px 5px rgba(0,0,0,0.3);
+  font-weight: bold;
+  font-size: 12px;
+}
+
+/* Leaflet map custom container */
+#crisis-map {
+  min-height: 520px;
+  width: 100%;
+  border-radius: 0.75rem;
+  z-index: 10;
+}
+
+/* Leaflet Popup Styling */
+.leaflet-popup-content-wrapper {
+  background: #0f172a;
+  color: #f8fafc;
+  border-radius: 0.5rem;
+  border: 1px solid #334155;
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.7);
+  padding: 4px;
+}
+
+.leaflet-popup-tip {
+  background: #0f172a;
+}
+
+.leaflet-container a.leaflet-popup-close-button {
+  color: #94a3b8;
+  padding: 6px 8px;
+}
+
+.leaflet-container a.leaflet-popup-close-button:hover {
+  color: #ffffff;
+}
+
+/* Custom Leaflet Controls in Dark Theme */
+.leaflet-bar a {
+  background-color: #1e293b !important;
+  color: #f8fafc !important;
+  border-bottom: 1px solid #334155 !important;
+}
+
+.leaflet-bar a:hover {
+  background-color: #334155 !important;
+}
+
+/* Custom Scrollbar */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+
+::-webkit-scrollbar-track {
+  background: #0f172a;
+}
+
+::-webkit-scrollbar-thumb {
+  background: #334155;
+  border-radius: 3px;
+}
+
+::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Animated alert ticker */
+@keyframes ticker {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+.ticker-text {
+  display: inline-block;
+  white-space: nowrap;
+  animation: ticker 35s linear infinite;
+}
+
+.ticker-container:hover .ticker-text {
+  animation-play-state: paused;
+}
+
+/* Post-Disaster Recovery Module Styles */
+.post-subtab-btn {
+  transition: all 0.2s ease;
+}
+
+.post-subtab-btn.active {
+  background-color: #3b82f6;
+  color: #ffffff;
+  font-weight: 600;
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.35);
+}
+
+.post-subtab-btn:not(.active) {
+  color: #94a3b8;
+  background-color: rgba(30, 41, 59, 0.6);
+}
+
+.post-subtab-btn:not(.active):hover {
+  color: #ffffff;
+  background-color: rgba(51, 65, 85, 0.8);
+}
+
+/* Safe Citizen Pulse Badge */
+.safe-pulse-indicator {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.safe-pulse-indicator::after {
+  content: '';
+  position: absolute;
+  width: 100%;
+  height: 100%;
+  border-radius: 9999px;
+  background-color: rgba(16, 185, 129, 0.4);
+  animation: pulse-ring 2s cubic-bezier(0.215, 0.61, 0.355, 1) infinite;
+}
+
+/* Photo Upload Preview Box */
+.photo-preview-dropzone {
+  border: 2px dashed #475569;
+  border-radius: 0.75rem;
+  background: rgba(15, 23, 42, 0.6);
+  transition: border-color 0.2s ease, background-color 0.2s ease;
+}
+
+.photo-preview-dropzone:hover {
+  border-color: #60a5fa;
+  background: rgba(30, 41, 59, 0.6);
+}
+
+/* Donation Gradient Meter */
+.donation-meter-fill {
+  background: linear-gradient(90deg, #10b981 0%, #06b6d4 50%, #3b82f6 100%);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.4);
+}
+
+/* Auth Access Denied Shake Animation */
+@keyframes shake-anim {
+  0%, 100% { transform: translateX(0); }
+  20%, 60% { transform: translateX(-6px); }
+  40%, 80% { transform: translateX(6px); }
+}
+.animate-shake {
+  animation: shake-anim 0.35s ease-in-out;
+}
+
