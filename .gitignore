@@ -3,8 +3,9 @@ __pycache__/
 *.py[cod]
 *$py.class
 
-# Logs and temporary files
+# Logs, binaries, and temporary files
 *.log
+*.exe
 scratch/
 .system_generated/
 

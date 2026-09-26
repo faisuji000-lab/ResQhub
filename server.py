@@ -17,7 +17,7 @@ except Exception:
     pass
 
 PORT = 8080
-BASE_DIR = r"C:\Users\parvi\.gemini\antigravity\scratch\disaster-management-system"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 STATE_FILE = os.path.join(BASE_DIR, "data-state.json")
 DEFAULT_TUNNEL_URL = "https://nor-iowa-delivers-nurse.trycloudflare.com"
 
@@ -44,9 +44,21 @@ def broadcast_event(event_type, payload):
 
 def get_live_tunnel_url():
     try:
+        import re
+        # 1. Check portable local tunnel.log created by start-server.bat
+        local_log = os.path.join(BASE_DIR, "tunnel.log")
+        if os.path.exists(local_log):
+            try:
+                with open(local_log, 'r', encoding='utf-8', errors='ignore') as lf:
+                    matches = re.findall(r'https://[a-zA-Z0-9\-]+\.trycloudflare\.com', lf.read())
+                    if matches:
+                        return matches[-1]
+            except Exception:
+                pass
+
+        # 2. Fallback to background tasks directory if present
         tasks_dir = r"C:\Users\parvi\.gemini\antigravity\brain\07d3b055-5c87-4ffc-9ff6-d53b8006c47c\.system_generated\tasks"
         if os.path.exists(tasks_dir):
-            import re
             logs = [os.path.join(tasks_dir, f) for f in os.listdir(tasks_dir) if f.endswith('.log')]
             logs.sort(key=lambda x: os.path.getmtime(x), reverse=True)
             for lp in logs[:5]:
