@@ -402,7 +402,8 @@ function adminAcknowledgeAndDispatch() {
   const candidateUrls = [
     `${SERVER_BASE}/api/update-sos`,
     'http://localhost:8080/api/update-sos',
-    'http://127.0.0.1:8080/api/update-sos'
+    'http://127.0.0.1:8080/api/update-sos',
+    'https://nor-iowa-delivers-nurse.trycloudflare.com/api/update-sos'
   ];
   for (const url of candidateUrls) {
     if (!url || (url.startsWith('/') && window.location.protocol === 'file:')) continue;
@@ -493,7 +494,8 @@ async function syncWithServer() {
   const candidateUrls = [
     `${SERVER_BASE}/api/data`,
     'http://localhost:8080/api/data',
-    'http://127.0.0.1:8080/api/data'
+    'http://127.0.0.1:8080/api/data',
+    'https://nor-iowa-delivers-nurse.trycloudflare.com/api/data'
   ];
 
   let rawData = null;
