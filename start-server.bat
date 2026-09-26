@@ -12,8 +12,8 @@ start "EPICENTER Backend Server (Port 8080)" cmd /k "python server.py"
 timeout /t 2 /nobreak >nul
 
 if exist "..\cloudflared.exe" (
-    echo [2/3] Launching Public 4G/5G Mobile Tunnel (cloudflared)...
-    start "EPICENTER Mobile Tunnel" cmd /k "..\cloudflared.exe tunnel --url http://localhost:8080"
+    echo [2/3] Launching Public 4G/5G Mobile Tunnel (cloudflared over HTTP2)...
+    start "EPICENTER Mobile Tunnel" cmd /k "..\cloudflared.exe tunnel --protocol http2 --url http://localhost:8080"
 )
 
 echo [3/3] Opening Admin Command Console in Browser...

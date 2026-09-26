@@ -19,7 +19,7 @@ except Exception:
 PORT = 8080
 BASE_DIR = r"C:\Users\parvi\.gemini\antigravity\scratch\disaster-management-system"
 STATE_FILE = os.path.join(BASE_DIR, "data-state.json")
-DEFAULT_TUNNEL_URL = "https://subsection-finest-shepherd-bunny.trycloudflare.com"
+DEFAULT_TUNNEL_URL = "https://nor-iowa-delivers-nurse.trycloudflare.com"
 
 # Global SSE listeners for instant 0-delay push notifications
 EVENT_LISTENERS = []

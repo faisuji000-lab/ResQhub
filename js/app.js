@@ -2226,7 +2226,7 @@ window.addEventListener('DOMContentLoaded', () => {
       renderOfflineQrCode(liveMobileUrl);
     })
     .catch(() => {
-      const fallbackUrl = "https://subsection-finest-shepherd-bunny.trycloudflare.com/user.html";
+      const fallbackUrl = "https://nor-iowa-delivers-nurse.trycloudflare.com/user.html";
       renderOfflineQrCode(fallbackUrl);
     });
 });
